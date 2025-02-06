@@ -184,9 +184,11 @@ class Logger {
       std::cerr << out;
       fflush(stderr);
     }
-    if (fout_) {
+#if 0  // segmentation fault on AppleClang
+    if (fout_ != nullptr) {
       fwrite(out.data(), 1, out.size(), fout_);
     }
+#endif    
     if (LOG_CODE == kFatal) {
       exit(1);
     }

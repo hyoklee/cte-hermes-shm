@@ -160,10 +160,21 @@ class ConfigParse {
   template <typename T>
   static T ParseNumber(const std::string &num_text) {
     T size;
+    
+    size_t i = 0;
+    std::string numericPart;
+
     if (num_text == "inf") {
       return std::numeric_limits<T>::max();
     }
-    std::stringstream(num_text) >> size;
+    
+    // This is necessary for AppleClang. It can't handle "PB" unit.
+    while (i < num_text.length() && (std::isdigit(num_text[i]) || num_text[i] == '.')) {
+      numericPart += num_text[i];
+      i++;
+    }
+    
+    std::stringstream(numericPart) >> size;
     return size;
   }
 
@@ -174,6 +185,7 @@ class ConfigParse {
       return std::numeric_limits<hshm::u64>::max();
     }
     std::string suffix = ParseNumberSuffix(size_text);
+    
     if (suffix.empty()) {
       return Unit<hshm::u64>::Bytes(size);
     } else if (suffix[0] == 'k' || suffix[0] == 'K') {
@@ -181,11 +193,11 @@ class ConfigParse {
     } else if (suffix[0] == 'm' || suffix[0] == 'M') {
       return hshm::Unit<hshm::u64>::Megabytes(size);
     } else if (suffix[0] == 'g' || suffix[0] == 'G') {
-      return hshm::Unit<hshm::u64>::Terabytes(size);
+      return hshm::Unit<hshm::u64>::Gigabytes(size);
     } else if (suffix[0] == 't' || suffix[0] == 'T') {
       return hshm::Unit<hshm::u64>::Terabytes(size);
     } else if (suffix[0] == 'p' || suffix[0] == 'P') {
-      return hshm::Unit<hshm::u64>::Terabytes(size);
+      return hshm::Unit<hshm::u64>::Petabytes(size);
     } else {
       HELOG(kFatal, "Could not parse the size: {}", size_text);
       exit(1);

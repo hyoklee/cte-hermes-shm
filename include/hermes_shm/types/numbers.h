@@ -113,23 +113,23 @@ class Unit {
   }
   template <typename U>
   CLS_CONST T Kilobytes(U n) {
-    return (T)(T(n) * (((T)1) << 10));
+    return (T)(n * (((T)1) << 10));
   }
   template <typename U>
   CLS_CONST T Megabytes(U n) {
-    return (T)(T(n) * (((T)1) << 20));
+    return (T)(n * (((T)1) << 20));
   }
   template <typename U>
   CLS_CONST T Gigabytes(U n) {
-    return (T)(T(n) * (((T)1) << 30));
+    return (T)(n * (((T)1) << 30));
   }
   template <typename U>
   CLS_CONST T Terabytes(U n) {
-    return (T)(T(n) * (((T)1) << 40));
+    return (T)(n * (((T)1) << 40));
   }
   template <typename U>
   CLS_CONST T Petabytes(U n) {
-    return (T)(T(n) * (((T)1) << 50));
+    return (T)(n * (((T)1) << 50));
   }
   template <typename U>
   CLS_CONST T Seconds(U n) {
