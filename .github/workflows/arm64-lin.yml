@@ -24,4 +24,6 @@ jobs:
           mkdir build
           cd build
           cmake -DSITE:STRING="ubu-24.arm64" ..
+          ctest -T Build
+          sudo make install
           ctest -D Experimental

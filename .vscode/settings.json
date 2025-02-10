@@ -105,5 +105,6 @@
         "xloctime": "cpp",
         "xmemory": "cpp",
         "xtr1common": "cpp"
-    }
+    },
+    "sarif-viewer.connectToGithubCodeScanning": "off"
 }
