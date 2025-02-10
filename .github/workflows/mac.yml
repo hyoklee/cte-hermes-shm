@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ macos-15, macos-14, macos-13 ]
+        os: [ macos-15 ]
     name: mac
     runs-on: ${{ matrix.os }}
     steps:
@@ -37,7 +37,7 @@ jobs:
           export OpenMP_CXX_LIB_NAMES="libomp"
           mkdir build
           cd build
-          cmake -DOpenMP_CXX_FLAG="-Xclang -fopenmp" -DOpenMP_CXX_INCLUDE_DIR=$BREW_PREFIX/opt/libomp/include -DOpenMP_CXX_LIB_NAMES=libomp -DOpenMP_C_FLAG="-Xclang -fopenmp" -DOpenMP_C_INCLUDE_DIR=$BREW_PREFIX/opt/libomp/include -DOpenMP_C_LIB_NAMES=libomp -DOpenMP_libomp_LIBRARY=$BREW_PREFIX/opt/libomp/lib/libomp.dylib -DSITE:STRING=${{ matrix.os }} -DHSHM_ENABLE_PROCFS_SYSINFO:BOOL=ON ..
+          cmake -DOpenMP_CXX_FLAG="-Xclang -fopenmp" -DOpenMP_CXX_INCLUDE_DIR=$BREW_PREFIX/opt/libomp/include -DOpenMP_CXX_LIB_NAMES=libomp -DOpenMP_C_FLAG="-Xclang -fopenmp" -DOpenMP_C_INCLUDE_DIR=$BREW_PREFIX/opt/libomp/include -DOpenMP_C_LIB_NAMES=libomp -DOpenMP_libomp_LIBRARY=$BREW_PREFIX/opt/libomp/lib/libomp.dylib -DSITE:STRING="mac-15" -DHSHM_ENABLE_PROCFS_SYSINFO:BOOL=ON ..
           ctest -T Build
           sudo make install 
           ctest -D Experimental
