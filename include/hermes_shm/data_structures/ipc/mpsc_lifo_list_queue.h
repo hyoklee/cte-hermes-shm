@@ -180,7 +180,7 @@ class mpsc_lifo_list_queue : public ShmContainer {
     bool ret;
     do {
       size_t tail_shm = tail_shm_.load();
-#if !defined(__arm__)
+#if !defined(__arm64__) || !defined(__APPLE__)
       entry->next_shm_ = tail_shm;
 #endif      
       ret = tail_shm_.compare_exchange_weak(tail_shm, entry.shm_.off_.load());
@@ -229,11 +229,13 @@ class mpsc_lifo_list_queue : public ShmContainer {
       val.shm_.off_ = tail_shm.load();
       val.shm_.alloc_id_ = alloc->GetId();
       val.ptr_ = alloc->template Convert<T>(tail_shm);
-#if !defined(__arm__)
+#if defined(__arm64__) && defined(__APPLE__)
+      ret = true;
+#else      
       hshm::size_t next_tail = val->next_shm_.load();
       ret = tail_shm_.compare_exchange_weak(tail_shm.off_.ref(), next_tail);
 #endif
-      ret = true;
+
     } while (!ret);
     --count_;
     return qtok_t(1);
