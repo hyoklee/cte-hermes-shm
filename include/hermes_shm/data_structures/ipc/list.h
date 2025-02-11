@@ -509,8 +509,8 @@ class list : public ShmContainer {
   /** Constant forward iterator end */
   HSHM_CROSS_FUN
   citerator_t cend() const {
-    return iterator_t(const_cast<list &>(*this), nullptr,
-                      OffsetPointer::GetNull());
+    return citerator_t(const_cast<list &>(*this), nullptr,
+		       OffsetPointer::GetNull());
   }
 
   /**====================================
