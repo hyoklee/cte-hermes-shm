@@ -10,6 +10,13 @@ if(PkgConfig)
     message(STATUS "found pkg config")
 endif()
 
+# Doxygen
+if(HSHM_ENABLE_DOXYGEN)
+    find_package(Perl REQUIRED)
+    find_package(Doxygen REQUIRED)
+    message(STATUS "found doxygen at ${DOXYGEN_EXECUTABLE}")
+endif()
+
 # Catch2
 find_package(Catch2 3.0.1 REQUIRED)
 message(STATUS "found catch2.h at ${Catch2_CXX_INCLUDE_DIRS}")
@@ -140,6 +147,16 @@ if(HSHM_ENABLE_ENCRYPT)
     set(ENCRYPT_LIB_DIRS ${libcrypto_LIBRARY_DIRS})
 endif()
 
+# Add elf
+if(HSHM_USE_ELF)
+    pkg_check_modules(libelf REQUIRED libelf)
+    message(STATUS "found libelf.h at ${libelf_INCLUDE_DIRS}")
+
+    set(ELF_LIBS ${libelf_LIBRARIES})
+    set(ELF_INCLUDES ${libelf_INCLUDE_DIRS})
+    set(ELF_LIB_DIRS ${libelf_LIBRARY_DIRS})
+endif()
+
 # ------------------------------------------------------------------------------
 # GPU Support Functions
 # ------------------------------------------------------------------------------
@@ -159,7 +176,6 @@ macro(hshm_enable_cuda CXX_STANDARD)
     set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES 0)
     set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_LIBRARIES 0)
     set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_OBJECTS 0)
-
 endmacro()
 
 # Enable rocm boilerplate
@@ -297,4 +313,54 @@ function(add_cuda_executable EXE_NAME DO_COPY)
             POSITION_INDEPENDENT_CODE ON
         )
     endif()
+endfunction()
+
+# Function for autoregistering a jarvis repo
+macro(jarvis_repo_add REPO_PATH PIPELINE_PATH)
+    # Get the file name of the source path
+    get_filename_component(REPO_NAME ${REPO_PATH} NAME)
+
+    # Install jarvis repo
+    install(DIRECTORY ${REPO_PATH}
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/jarvis)
+
+    # Add jarvis repo after installation
+    install(CODE "execute_process(COMMAND jarvis repo add ${CMAKE_INSTALL_PREFIX}/jarvis/${REPO_NAME})")
+
+    if(REPO_NAME)
+        install(DIRECTORY ${PIPELINE_PATH}
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/jarvis)
+    endif()
+endmacro()
+
+# DOXYGEN
+function(add_doxygen_doc)
+    set(options)
+    set(oneValueArgs BUILD_DIR DOXY_FILE TARGET_NAME COMMENT)
+    set(multiValueArgs)
+
+    cmake_parse_arguments(DOXY_DOC
+        "${options}"
+        "${oneValueArgs}"
+        "${multiValueArgs}"
+        ${ARGN}
+    )
+
+    configure_file(
+        ${DOXY_DOC_DOXY_FILE}
+        ${DOXY_DOC_BUILD_DIR}/Doxyfile
+        @ONLY
+    )
+
+    add_custom_target(${DOXY_DOC_TARGET_NAME}
+        COMMAND
+        ${DOXYGEN_EXECUTABLE} Doxyfile
+        WORKING_DIRECTORY
+        ${DOXY_DOC_BUILD_DIR}
+        COMMENT
+        "Building ${DOXY_DOC_COMMENT} with Doxygen"
+        VERBATIM
+    )
+
+    message(STATUS "Added ${DOXY_DOC_TARGET_NAME} [Doxygen] target to build documentation")
 endfunction()

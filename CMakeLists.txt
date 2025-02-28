@@ -4,20 +4,13 @@ include(CTest)
 set(CMAKE_CXX_STANDARD 17)
 
 # ------------------------------------------------------------------------------
-# DOTENV
-# ------------------------------------------------------------------------------
-if(EXISTS ${CMAKE_SOURCE_DIR}/.env.cmake)
-    include(.env.cmake)
-endif()
-
-# ------------------------------------------------------------------------------
 # Global variables
 # ------------------------------------------------------------------------------
 set(HSHM_SHM_VERSION_MAJOR 2)
 set(HSHM_SHM_VERSION_MINOR 0)
 set(HSHM_SHM_VERSION_PATCH 0)
-set(HSHM_SHM_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${HSHM_SHM_ROOT}/include)
+set(HSHM_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${HSHM_ROOT}/include)
 include_directories(${PROJECT_BINARY_DIR}/include)
 add_compile_definitions(_CRT_SECURE_NO_DEPRECATE)
 
@@ -28,6 +21,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
 option(BUILD_HSHM_TESTS "Build tests" ON)
 option(BUILD_HSHM_BENCHMARKS "Build benchmarks" OFF)
+option(HSHM_ENABLE_CMAKE_DOTENV "Build benchmarks" OFF)
 
 option(HSHM_ENABLE_MPI "Enable MPI support" OFF)
 option(HSHM_RPC_THALLIUM "Build tests which depend on thallium" OFF)
@@ -59,11 +53,20 @@ endif()
 if(HSHM_NO_COMPILE)
     install(
         FILES
-        ${CMAKE_SOURCE_DIR}/include/hermes_shm/constants/settings.h_templ
+        ${HSHM_ROOT}/include/hermes_shm/constants/settings.h_templ
         DESTINATION
         ${CMAKE_INSTALL_PREFIX}/include/hermes_shm/constants/
     )
     return()
+endif()
+
+# ------------------------------------------------------------------------------
+# DOTENV
+# ------------------------------------------------------------------------------
+if(HSHM_ENABLE_CMAKE_DOTENV)
+    if(EXISTS ${CMAKE_SOURCE_DIR}/.env.cmake)
+        include(.env.cmake)
+    endif()
 endif()
 
 # ------------------------------------------------------------------------------
@@ -122,11 +125,12 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "^(Appl
     endif()
 
     set(HSHM_COMPILER_GNU "ON")
+
     if(APPLE)
         set(REAL_TIME_FLAGS "-ldl")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
         set(REAL_TIME_FLAGS "")
-    else()    
+    else()
         set(REAL_TIME_FLAGS "-lrt -ldl")
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -166,18 +170,26 @@ endif()
 
 # HOST DEPENDENCIES
 add_library(host_deps INTERFACE)
+
+if(NOT YAML_CPP_LIBRARIES)
+    set(YAML_CPP_LIBRARIES yaml-cpp)
+endif()
+
 target_link_libraries(host_deps INTERFACE
-    yaml-cpp::yaml-cpp
+    ${YAML_CPP_LIBRARIES}
     ${REAL_TIME_FLAGS}
     ${SERIALIZATION_LIBS}
     ${COMPRESS_LIBS}
     ${ENCRYPT_LIBS}
     ${Boost_LIBRARIES}
+    ${ELF_LIBS}
 )
 target_link_directories(host_deps INTERFACE
-    ${COMPRESS_LIB_DIRS} ${ENCRYPT_LIB_DIRS} ${Boost_LIBRARY_DIRS})
+    ${COMPRESS_LIB_DIRS} ${ENCRYPT_LIB_DIRS} ${Boost_LIBRARY_DIRS}
+    ${ELF_LIB_DIRS} ${YAML_CPP_LIBRARY_DIR})
 target_include_directories(host_deps INTERFACE
-    ${COMPRESS_INCLUDES} ${ENCRYPT_INCLUDES} ${Boost_INCLUDE_DIRS})
+    ${COMPRESS_INCLUDES} ${ENCRYPT_INCLUDES} ${Boost_INCLUDE_DIRS}
+    ${ELF_INCLUDES} ${YAML_CPP_INCLUDE_DIR})
 
 if(HSHM_ENABLE_PTHREADS)
     target_link_libraries(host_deps INTERFACE pthread)
@@ -243,8 +255,6 @@ endif()
 # Documentation
 # -----------------------------------------------------------------------------
 if(HSHM_ENABLE_DOXYGEN)
-    include(UseDoxygenDoc)
-
     add_doxygen_doc(
         BUILD_DIR
         ${CMAKE_CURRENT_BINARY_DIR}/_build
@@ -282,14 +292,14 @@ endif()
 add_subdirectory(src)
 
 if(NOT IS_HSHM_MAIN)
-    add_custom_target(lint COMMAND bash ${HSHM_SHM_ROOT}/scripts/lint.sh ${HSHM_SHM_ROOT})
-    add_custom_target(preamble COMMAND python3 ${HSHM_SHM_ROOT}/scripts/preamble.py ${HSHM_SHM_ROOT})
+    add_custom_target(lint COMMAND bash ${HSHM_ROOT}/scripts/lint.sh ${HSHM_ROOT})
+    add_custom_target(preamble COMMAND python3 ${HSHM_ROOT}/scripts/preamble.py ${HSHM_ROOT})
 endif()
 
 # ------------------------------------------------------------------------------
 # Build tests + benchmarks
 # ------------------------------------------------------------------------------
-set(TEST_MAIN ${HSHM_SHM_ROOT}/test/unit)
+set(TEST_MAIN ${HSHM_ROOT}/test/unit)
 enable_testing()
 
 if(BUILD_HSHM_TESTS)
@@ -325,16 +335,10 @@ configure_file(
     ${PROJECT_BINARY_DIR}/CMakeFiles/HermesShmCommonConfig.cmake @ONLY
 )
 
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/CMake/UseDoxygenDoc.cmake
-    ${PROJECT_BINARY_DIR}/CMakeFiles/UseDoxygenDoc.cmake @ONLY
-)
-
 install(
     FILES
     ${PROJECT_BINARY_DIR}/CMakeFiles/HermesShmConfig.cmake
     ${PROJECT_BINARY_DIR}/CMakeFiles/HermesShmCommonConfig.cmake
-    ${PROJECT_BINARY_DIR}/CMakeFiles/UseDoxygenDoc.cmake
     DESTINATION
     ${CMAKE_INSTALL_PREFIX}/cmake
 )
@@ -344,3 +348,5 @@ install(EXPORT ${HSHM_EXPORTED_TARGETS}
     NAMESPACE hshm::
     DESTINATION cmake
 )
+
+jarvis_repo_add("${HSHM_ROOT}/test/jarvis_hshm" "")
