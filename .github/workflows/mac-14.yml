@@ -3,7 +3,7 @@ name: mac-14
 on:
   workflow_dispatch:
   push:
-    branches: master
+    branches: main
 
 jobs:
   build:
