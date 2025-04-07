@@ -86,6 +86,11 @@ union AllocatorId {
     printf("(%s) Allocator ID: %u.%u\n", kCurrentDevice, bits_.major_,
            bits_.minor_);
   }
+
+  friend std::ostream &operator<<(std::ostream &os, const AllocatorId &id) {
+    os << id.bits_.major_ << "." << id.bits_.minor_;
+    return os;
+  }
 };
 
 class Allocator;
@@ -101,6 +106,13 @@ template <bool ATOMIC = false>
 struct OffsetPointerBase : public ShmPointer {
   hipc::opt_atomic<hshm::size_t, ATOMIC>
       off_; /**< Offset within the allocator's slot */
+
+  /** ostream operator */
+  friend std::ostream &operator<<(std::ostream &os,
+                                  const OffsetPointerBase &ptr) {
+    os << ptr.off_.load();
+    return os;
+  }
 
   /** Default constructor */
   HSHM_INLINE_CROSS_FUN OffsetPointerBase() = default;
@@ -302,6 +314,12 @@ struct PointerBase : public ShmPointer {
   AllocatorId alloc_id_;           /// Allocator the pointer comes from
   OffsetPointerBase<ATOMIC> off_;  /// Offset within the allocator's slot
 
+  /** Ostream operator */
+  friend std::ostream &operator<<(std::ostream &os, const PointerBase &ptr) {
+    os << ptr.alloc_id_ << "::" << ptr.off_;
+    return os;
+  }
+
   /** Default constructor */
   HSHM_INLINE_CROSS_FUN PointerBase() = default;
 
@@ -459,42 +477,48 @@ using TypedAtomicPointer = AtomicPointer;
 
 /** Struct containing both private and shared pointer */
 template <typename T = char, typename PointerT = Pointer>
-struct LPointer : public ShmPointer {
+struct FullPtr : public ShmPointer {
   T *ptr_;
   PointerT shm_;
 
+  /** Ostream operator */
+  friend std::ostream &operator<<(std::ostream &os, const FullPtr &ptr) {
+    os << (void *)ptr.ptr_ << " " << ptr.shm_;
+    return os;
+  }
+
   /** Default constructor */
-  HSHM_INLINE_CROSS_FUN LPointer() = default;
+  HSHM_INLINE_CROSS_FUN FullPtr() = default;
 
   /** Full constructor */
-  HSHM_INLINE_CROSS_FUN LPointer(T *ptr, const PointerT &shm)
-      : ptr_(ptr), shm_(shm) {}
+  HSHM_INLINE_CROSS_FUN FullPtr(const T *ptr, const PointerT &shm)
+      : ptr_(const_cast<T *>(ptr)), shm_(shm) {}
 
   /** SHM constructor (in memory_manager.h) */
-  HSHM_INLINE_CROSS_FUN explicit LPointer(const PointerT &shm);
+  HSHM_INLINE_CROSS_FUN explicit FullPtr(const PointerT &shm);
 
   /** Private half constructor (in memory_manager.h) */
-  HSHM_INLINE_CROSS_FUN explicit LPointer(T *ptr);
+  HSHM_INLINE_CROSS_FUN explicit FullPtr(const T *ptr);
 
   /** Private half + alloc constructor (in memory_manager.h) */
-  HSHM_INLINE_CROSS_FUN explicit LPointer(hipc::Allocator *alloc, T *ptr);
+  HSHM_INLINE_CROSS_FUN explicit FullPtr(hipc::Allocator *alloc, const T *ptr);
 
   /** Shared half + alloc constructor (in memory_manager.h) */
-  HSHM_INLINE_CROSS_FUN explicit LPointer(hipc::Allocator *alloc,
-                                          const OffsetPointer &shm);
+  HSHM_INLINE_CROSS_FUN explicit FullPtr(hipc::Allocator *alloc,
+                                         const OffsetPointer &shm);
 
   /** Copy constructor */
-  HSHM_INLINE_CROSS_FUN LPointer(const LPointer &other)
+  HSHM_INLINE_CROSS_FUN FullPtr(const FullPtr &other)
       : ptr_(other.ptr_), shm_(other.shm_) {}
 
   /** Move constructor */
-  HSHM_INLINE_CROSS_FUN LPointer(LPointer &&other) noexcept
+  HSHM_INLINE_CROSS_FUN FullPtr(FullPtr &&other) noexcept
       : ptr_(other.ptr_), shm_(other.shm_) {
     other.SetNull();
   }
 
   /** Copy assignment operator */
-  HSHM_INLINE_CROSS_FUN LPointer &operator=(const LPointer &other) {
+  HSHM_INLINE_CROSS_FUN FullPtr &operator=(const FullPtr &other) {
     if (this != &other) {
       ptr_ = other.ptr_;
       shm_ = other.shm_;
@@ -503,7 +527,7 @@ struct LPointer : public ShmPointer {
   }
 
   /** Move assignment operator */
-  HSHM_INLINE_CROSS_FUN LPointer &operator=(LPointer &&other) {
+  HSHM_INLINE_CROSS_FUN FullPtr &operator=(FullPtr &&other) {
     if (this != &other) {
       ptr_ = other.ptr_;
       shm_ = other.shm_;
@@ -519,63 +543,63 @@ struct LPointer : public ShmPointer {
   HSHM_INLINE_CROSS_FUN T &operator*() const { return *ptr_; }
 
   /** Equality operator */
-  HSHM_INLINE_CROSS_FUN bool operator==(const LPointer &other) const {
+  HSHM_INLINE_CROSS_FUN bool operator==(const FullPtr &other) const {
     return ptr_ == other.ptr_ && shm_ == other.shm_;
   }
 
   /** Inequality operator */
-  HSHM_INLINE_CROSS_FUN bool operator!=(const LPointer &other) const {
+  HSHM_INLINE_CROSS_FUN bool operator!=(const FullPtr &other) const {
     return ptr_ != other.ptr_ || shm_ != other.shm_;
   }
 
   /** Addition operator */
-  HSHM_INLINE_CROSS_FUN LPointer operator+(size_t size) const {
-    return LPointer(ptr_ + size, shm_ + size);
+  HSHM_INLINE_CROSS_FUN FullPtr operator+(size_t size) const {
+    return FullPtr(ptr_ + size, shm_ + size);
   }
 
   /** Subtraction operator */
-  HSHM_INLINE_CROSS_FUN LPointer operator-(size_t size) const {
-    return LPointer(ptr_ - size, shm_ - size);
+  HSHM_INLINE_CROSS_FUN FullPtr operator-(size_t size) const {
+    return FullPtr(ptr_ - size, shm_ - size);
   }
 
   /** Addition assignment operator */
-  HSHM_INLINE_CROSS_FUN LPointer &operator+=(size_t size) {
+  HSHM_INLINE_CROSS_FUN FullPtr &operator+=(size_t size) {
     ptr_ += size;
     shm_ += size;
     return *this;
   }
 
   /** Subtraction assignment operator */
-  HSHM_INLINE_CROSS_FUN LPointer &operator-=(size_t size) {
+  HSHM_INLINE_CROSS_FUN FullPtr &operator-=(size_t size) {
     ptr_ -= size;
     shm_ -= size;
     return *this;
   }
 
   /** Increment operator (pre) */
-  HSHM_INLINE_CROSS_FUN LPointer &operator++() {
+  HSHM_INLINE_CROSS_FUN FullPtr &operator++() {
     ptr_++;
     shm_++;
     return *this;
   }
 
   /** Decrement operator (pre) */
-  HSHM_INLINE_CROSS_FUN LPointer &operator--() {
+  HSHM_INLINE_CROSS_FUN FullPtr &operator--() {
     ptr_--;
     shm_--;
     return *this;
   }
 
   /** Increment operator (post) */
-  HSHM_INLINE_CROSS_FUN LPointer operator++(int) {
-    LPointer tmp(*this);
+  HSHM_INLINE_CROSS_FUN FullPtr operator++(int) {
+    FullPtr tmp(*this);
     operator++();
     return tmp;
   }
 
   /** Decrement operator (post) */
-  HSHM_INLINE_CROSS_FUN LPointer operator--(int) {
-    LPointer tmp(*this);
+  HSHM_INLINE_CROSS_FUN FullPtr operator--(int) {
+    FullPtr tmp(*this);
     operator--();
     return tmp;
   }
@@ -584,8 +608,8 @@ struct LPointer : public ShmPointer {
   HSHM_INLINE_CROSS_FUN bool IsNull() const { return ptr_ == nullptr; }
 
   /** Get null */
-  HSHM_INLINE_CROSS_FUN static LPointer GetNull() {
-    return LPointer(nullptr, Pointer::GetNull());
+  HSHM_INLINE_CROSS_FUN static FullPtr GetNull() {
+    return FullPtr(nullptr, Pointer::GetNull());
   }
 
   /** Set to null */
@@ -593,48 +617,48 @@ struct LPointer : public ShmPointer {
 
   /** Reintrepret cast to other internal type */
   template <typename U>
-  HSHM_INLINE_CROSS_FUN LPointer<U, PointerT> &Cast() {
-    return DeepCast<LPointer<U, PointerT>>();
+  HSHM_INLINE_CROSS_FUN FullPtr<U, PointerT> &Cast() {
+    return DeepCast<FullPtr<U, PointerT>>();
   }
 
   /** Reintrepret cast to other internal type (const) */
   template <typename U>
-  HSHM_INLINE_CROSS_FUN const LPointer<U, PointerT> &Cast() const {
-    return DeepCast<LPointer<U, PointerT>>();
+  HSHM_INLINE_CROSS_FUN const FullPtr<U, PointerT> &Cast() const {
+    return DeepCast<FullPtr<U, PointerT>>();
   }
 
-  /** Reintrepret cast to another LPointer */
-  template <typename LPointerT>
-  HSHM_INLINE_CROSS_FUN LPointerT &DeepCast() {
-    return *((LPointerT *)this);
+  /** Reintrepret cast to another FullPtr */
+  template <typename FullPtrT>
+  HSHM_INLINE_CROSS_FUN FullPtrT &DeepCast() {
+    return *((FullPtrT *)this);
   }
 
-  /** Reintrepret cast to another LPointer (const) */
-  template <typename LPointerT>
-  HSHM_INLINE_CROSS_FUN const LPointerT &DeepCast() const {
-    return *((LPointerT *)this);
+  /** Reintrepret cast to another FullPtr (const) */
+  template <typename FullPtrT>
+  HSHM_INLINE_CROSS_FUN const FullPtrT &DeepCast() const {
+    return *((FullPtrT *)this);
   }
 
   /** Mark first bit */
-  HSHM_INLINE_CROSS_FUN LPointer Mark() const {
-    return LPointer(ptr_, shm_.Mark());
+  HSHM_INLINE_CROSS_FUN FullPtr Mark() const {
+    return FullPtr(ptr_, shm_.Mark());
   }
 
   /** Check if first bit is marked */
   HSHM_INLINE_CROSS_FUN bool IsMarked() const { return shm_.IsMarked(); }
 
   /** Unmark first bit */
-  HSHM_INLINE_CROSS_FUN LPointer Unmark() const {
-    return LPointer(ptr_, shm_.Unmark());
+  HSHM_INLINE_CROSS_FUN FullPtr Unmark() const {
+    return FullPtr(ptr_, shm_.Unmark());
   }
 
   /** Set to 0 */
   HSHM_INLINE_CROSS_FUN void SetZero() { shm_.SetZero(); }
 };
 
-/** Alias to local pointer */
+/** Alias to full pointer (deprecated) */
 template <typename T = char, typename PointerT = Pointer>
-using FullPtr = LPointer<T, PointerT>;
+using LPointer = FullPtr<T, PointerT>;
 
 /** Struct containing both a pointer and its size */
 template <typename PointerT = Pointer>

@@ -10,13 +10,14 @@
  * have access to the file, you may request a copy from help@hdfgroup.org.   *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#include "basic_test.h"
-#include "test_init.h"
-#include "hermes_shm/data_structures/ipc/string.h"
-#include "hermes_shm/data_structures/all.h"
-#include "cereal/types/vector.hpp"
-#include "cereal/types/string.hpp"
 #include <cereal/types/atomic.hpp>
+
+#include "basic_test.h"
+#include "cereal/types/string.hpp"
+#include "cereal/types/vector.hpp"
+#include "hermes_shm/data_structures/all.h"
+#include "hermes_shm/data_structures/ipc/string.h"
+#include "test_init.h"
 
 TEST_CASE("SerializePod") {
   std::stringstream ss;
@@ -65,7 +66,6 @@ TEST_CASE("SerializeHipcVec0") {
   }
 }
 
-#if 0
 TEST_CASE("SerializeHipcVec") {
   std::stringstream ss;
   {
@@ -86,7 +86,6 @@ TEST_CASE("SerializeHipcVec") {
   }
 }
 
-
 TEST_CASE("SerializeHipcVecString") {
   std::stringstream ss;
   {
@@ -106,7 +105,6 @@ TEST_CASE("SerializeHipcVecString") {
     REQUIRE(x.vec() == y);
   }
 }
-
 
 TEST_CASE("SerializeHipcShmArchive") {
   std::stringstream ss;
@@ -130,35 +128,6 @@ TEST_CASE("SerializeHipcShmArchive") {
   }
 }
 
-
-
-TEST_CASE("SerializePodArray") {
-  std::stringstream ss;
-  hipc::CtxAllocator<HSHM_DEFAULT_ALLOC_T> alloc(HSHM_DEFAULT_ALLOC);
-  {
-    hipc::pod_array<int, 2> x;
-    x.construct(alloc, 5);
-    for (int i = 0; i < 5; ++i) {
-      x[i] = i;
-    }
-    cereal::BinaryOutputArchive ar(ss);
-    ar << x;
-    x.destroy();
-  }
-  {
-    hipc::pod_array<int, 2> x;
-    std::vector<int> y{0, 1, 2, 3, 4};
-    cereal::BinaryInputArchive ar(ss);
-    ar >> x;
-    REQUIRE(x.size_ == (int)y.size());
-    for (int i = 0; i < x.size_; ++i) {
-      REQUIRE(x[i] == y[i]);
-    }
-    x.destroy();
-  }
-}
-
-#endif
 TEST_CASE("SerializeAtomic") {
   std::stringstream ss;
   {
@@ -171,5 +140,20 @@ TEST_CASE("SerializeAtomic") {
     cereal::BinaryInputArchive ar(ss);
     ar >> x;
     REQUIRE(x == 225);
+  }
+}
+TEST_CASE("SerializeBitfield") {
+  std::stringstream ss;
+  {
+    hshm::ibitfield x;
+    x.SetBits(0x8);
+    cereal::BinaryOutputArchive ar(ss);
+    ar << x;
+  }
+  {
+    hshm::ibitfield x;
+    cereal::BinaryInputArchive ar(ss);
+    ar >> x;
+    REQUIRE(x.bits_ == 0x8);
   }
 }

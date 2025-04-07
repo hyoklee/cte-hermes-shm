@@ -118,27 +118,36 @@
  * */
 #if defined(HSHM_COMPILER_MSVC)
 #define HSHM_INLINE_FLAG __forceinline
+#define HSHM_NO_INLINE_FLAG __declspec(noinline)
+#define HSHM_FUNC_IS_USED __declspec(selectany)
 #elif defined(HSHM_COMPILER_GNU)
 #define HSHM_INLINE_FLAG __attribute__((always_inline))
+#define HSHM_NO_INLINE_FLAG __attribute__((noinline))
+#define HSHM_FUNC_IS_USED __attribute__((used))
 #endif
 
+#define HSHM_NO_INLINE HSHM_NO_INLINE_FLAG
 #ifndef HSHM_DEBUG
 #define HSHM_INLINE
 #else
 #define HSHM_INLINE inline HSHM_INLINE_FLAG
 #endif
 
-/** Function decorators */
-#define HSHM_REG_FUN ROCM_HOST
+/** Macros for gpu/host function + var */
 #define HSHM_HOST_FUN ROCM_HOST
+#define HSHM_HOST_VAR ROCM_HOST
 #define HSHM_GPU_FUN ROCM_DEVICE
+#define HSHM_GPU_VAR ROCM_DEVICE
 #define HSHM_CROSS_FUN ROCM_HOST_DEVICE
 #define HSHM_GPU_KERNEL ROCM_KERNEL
 
-/** Macro for inline function */
-#define HSHM_INLINE_CROSS_FUN HSHM_INLINE HSHM_CROSS_FUN
+/** Macro for inline gpu/host function + var */
+#define HSHM_INLINE_CROSS_FUN HSHM_CROSS_FUN HSHM_INLINE
+#define HSHM_INLINE_CROSS_VAR HSHM_CROSS_FUN inline
 #define HSHM_INLINE_GPU_FUN ROCM_DEVICE HSHM_INLINE
+#define HSHM_INLINE_GPU_VAR ROCM_DEVICE inline
 #define HSHM_INLINE_HOST_FUN ROCM_HOST HSHM_INLINE
+#define HSHM_INLINE_HOST_VAR ROCM_HOST inline
 
 /** Macro for selective cross function */
 #ifdef HSHM_IS_HOST
@@ -150,8 +159,7 @@
 #endif
 
 /** Test cross functions */
-#define HSHM_NO_INLINE_CROSS_FUN
-#define HSHM_NO_CROSS_FUN
+#define HSHM_NO_INLINE_CROSS_FUN HSHM_NO_INLINE HSHM_CROSS_FUN HSHM_FUNC_IS_USED
 
 /** Bitfield macros */
 #define MARK_FIRST_BIT_MASK(T) ((T)1 << (sizeof(T) * 8 - 1))
@@ -161,9 +169,11 @@
 
 /** Class constant macro */
 #define CLS_CONST static inline constexpr const
+#define CLS_CROSS_CONST CLS_CONST
 
 /** Class constant macro */
 #define GLOBAL_CONST inline const
+#define GLOBAL_CROSS_CONST inline const
 
 /** Namespace definitions */
 namespace hshm {}
@@ -195,8 +205,8 @@ namespace hipc = hshm::ipc;
 
 /** Define the default allocator class */
 #ifndef HSHM_DEFAULT_ALLOC_T
-#define HSHM_DEFAULT_ALLOC_T hipc::MallocAllocator
-// #define HSHM_DEFAULT_ALLOC_T hipc::ThreadLocalAllocator
+// #define HSHM_DEFAULT_ALLOC_T hipc::MallocAllocator
+#define HSHM_DEFAULT_ALLOC_T hipc::ThreadLocalAllocator
 #endif
 #define HSHM_DEFAULT_ALLOC \
   HSHM_MEMORY_MANAGER->template GetDefaultAllocator<HSHM_DEFAULT_ALLOC_T>()
@@ -221,6 +231,7 @@ namespace hipc = hshm::ipc;
 
 /** Default memory context object */
 #define HSHM_DEFAULT_MEM_CTX (hipc::MemContext{})
+#define HSHM_MCTX HSHM_DEFAULT_MEM_CTX
 
 /** Compatability hack for static_assert */
 template <bool TRUTH, typename T = int>

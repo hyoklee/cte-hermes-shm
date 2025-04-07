@@ -51,8 +51,7 @@ void MemoryManager::Init() {
   root_alloc_id_.bits_.minor_ = 0;
   StackAllocator *root_alloc = (StackAllocator *)root_alloc_space_;
   Allocator::ConstructObj(*root_alloc);
-  root_alloc->shm_init(root_alloc_id_, 0, root_backend_->data_,
-                       root_backend_->data_size_);
+  root_alloc->shm_init(root_alloc_id_, 0, *root_backend_);
   root_alloc_ = root_alloc;
   default_allocator_ = root_alloc_;
 
@@ -120,14 +119,15 @@ void AllocateCudaBackend(int dev, MemoryBackend *other) {
   cudaSetDevice(dev);
   switch (other->header_->type_) {
     case MemoryBackendType::kCudaMalloc: {
-      CudaMalloc *pack, *cpy;
-      cudaMallocManaged(&pack, sizeof(CudaMalloc));
-      memcpy((char *)pack, (char *)other, sizeof(CudaMalloc));
-      pack->UnsetScanned();
-      pack->Disown();
-      AttachBackendKernel<<<1, 1>>>(pack);
-      cudaDeviceSynchronize();
-      cudaFree(pack);
+      // CudaMalloc *pack, *cpy;
+      // cudaMallocManaged(&pack, sizeof(CudaMalloc));
+      // memcpy((char *)pack, (char *)other, sizeof(CudaMalloc));
+      // pack->UnsetScanned();
+      // pack->Disown();
+      // AttachBackendKernel<<<1, 1>>>(pack);
+      // cudaDeviceSynchronize();
+      // cudaFree(pack);
+      break;
     }
     case MemoryBackendType::kCudaShmMmap: {
       CudaShmMmap *pack, *cpy;
@@ -138,6 +138,7 @@ void AllocateCudaBackend(int dev, MemoryBackend *other) {
       AttachBackendKernel<<<1, 1>>>(pack);
       cudaDeviceSynchronize();
       cudaFree(pack);
+      break;
     }
     default: {
       break;
@@ -152,13 +153,14 @@ void AllocateRocmBackend(int dev, MemoryBackend *other) {
   HIP_ERROR_CHECK(hipSetDevice(dev));
   switch (other->header_->type_) {
     case MemoryBackendType::kRocmMalloc: {
-      RocmMalloc *pack, *cpy;
-      HIP_ERROR_CHECK(hipMallocManaged(&pack, sizeof(RocmMalloc)));
-      memcpy((char *)pack, (char *)other, sizeof(RocmMalloc));
-      pack->UnsetScanned();
-      pack->Disown();
-      AttachBackendKernel<<<1, 1>>>(pack);
-      HIP_ERROR_CHECK(hipDeviceSynchronize());
+      // RocmMalloc *pack, *cpy;
+      // HIP_ERROR_CHECK(hipMallocManaged(&pack, sizeof(RocmMalloc)));
+      // memcpy((char *)pack, (char *)other, sizeof(RocmMalloc));
+      // pack->UnsetScanned();
+      // pack->Disown();
+      // AttachBackendKernel<<<1, 1>>>(pack);
+      // HIP_ERROR_CHECK(hipDeviceSynchronize());
+      break;
     }
     case MemoryBackendType::kRocmShmMmap: {
       RocmShmMmap *pack, *cpy;
@@ -240,6 +242,8 @@ Allocator *MemoryManager::RegisterAllocator(Allocator *alloc, bool do_scan) {
   }
   return alloc;
 }
+
+HSHM_DEFINE_GLOBAL_PTR_VAR_CC(hshm::ipc::MemoryManager, hshmMemoryManager);
 
 }  // namespace hshm::ipc
 

@@ -75,6 +75,7 @@ class Workloads {
 #ifndef __APPLE__      
       REQUIRE(p == ps[i]);
 #endif      
+      REQUIRE(p.alloc_id_.bits_.major_ == ps[i].alloc_id_.bits_.major_);
       REQUIRE(VerifyBuffer((char *)ptrs[i], page_size, (char)i));
     }
 

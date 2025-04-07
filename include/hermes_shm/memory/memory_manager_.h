@@ -5,16 +5,14 @@
 #ifndef HSHM_SHM_INCLUDE_HSHM_SHM_MEMORY_MEMORY_MANAGER__H_
 #define HSHM_SHM_INCLUDE_HSHM_SHM_MEMORY_MEMORY_MANAGER__H_
 
+#include <cstddef>
+#include <limits>
+
 #include "allocator/allocator_factory_.h"
 #include "hermes_shm/memory/allocator/allocator.h"
 #include "hermes_shm/memory/backend/posix_mmap.h"
 #include "hermes_shm/types/numbers.h"
 #include "hermes_shm/util/singleton.h"
-
-/** Singleton declaration */
-#define HSHM_MEMORY_MANAGER \
-  hshm::GlobalCrossSingleton<hshm::ipc::MemoryManager>::GetInstance()
-#define HSHM_MEMORY_MANAGER_T hshm::ipc::MemoryManager *
 
 namespace hshm::ipc {
 
@@ -224,7 +222,8 @@ class MemoryManager {
    * @param ptr the pointer to convert
    * */
   template <typename T, typename POINTER_T = Pointer>
-  HSHM_INLINE_CROSS_FUN POINTER_T Convert(AllocatorId allocator_id, T *ptr) {
+  HSHM_INLINE_CROSS_FUN POINTER_T Convert(AllocatorId allocator_id,
+                                          const T *ptr) {
     return GetAllocator<NullAllocator>(allocator_id)
         ->template Convert<T, POINTER_T>(ptr);
   }
@@ -237,18 +236,40 @@ class MemoryManager {
    * */
   template <typename T, typename POINTER_T = Pointer>
   HSHM_INLINE_CROSS_FUN POINTER_T Convert(T *ptr) {
+    Allocator *best_alloc = FindNearestAllocator(ptr);
+    if (best_alloc) {
+      return best_alloc->template Convert<T, POINTER_T>(ptr);
+    } else {
+      return Pointer::GetNull();
+    }
+  }
+
+  /**
+   * Find the allocator that most closely contains the pointer
+   */
+  template <typename T>
+  HSHM_INLINE_CROSS_FUN Allocator *FindNearestAllocator(T *ptr) {
+    size_t range = std::numeric_limits<size_t>::max();
+    Allocator *best_alloc = nullptr;
     for (auto &alloc : allocators_) {
-      if (alloc && alloc->ContainsPtr(ptr)) {
-        return alloc->template Convert<T, POINTER_T>(ptr);
+      if (alloc && alloc->ContainsPtr(ptr) && alloc->buffer_size_ <= range) {
+        range = alloc->buffer_size_;
+        best_alloc = alloc;
+      }
+      if (range < std::numeric_limits<size_t>::max()) {
+        break;
       }
     }
-    return Pointer::GetNull();
+    return best_alloc;
   }
 };
 
-class MemoryManagerGpu {
- public:
-};
+/** Singleton declaration */
+HSHM_DEFINE_GLOBAL_CROSS_PTR_VAR_H(hshm::ipc::MemoryManager, hshmMemoryManager);
+#define HSHM_MEMORY_MANAGER                               \
+  HSHM_GET_GLOBAL_CROSS_PTR_VAR(hshm::ipc::MemoryManager, \
+                                hshm::ipc::hshmMemoryManager)
+#define HSHM_MEMORY_MANAGER_T hshm::ipc::MemoryManager *
 
 }  // namespace hshm::ipc
 

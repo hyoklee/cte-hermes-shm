@@ -23,7 +23,6 @@
 #include "ipc/list.h"
 #include "ipc/mpsc_lifo_list_queue.h"
 #include "ipc/pair.h"
-#include "ipc/pod_array.h"
 #include "ipc/ring_ptr_queue.h"
 #include "ipc/ring_queue.h"
 #include "ipc/slist.h"
@@ -67,6 +66,12 @@
   using fixed_spsc_queue = HSHM_NS::fixed_spsc_queue<T, ALLOC_T>;            \
   template <typename T>                                                      \
   using fixed_mpsc_queue = HSHM_NS::fixed_mpsc_queue<T, ALLOC_T>;            \
+  template <typename T>                                                      \
+  using circular_mpsc_queue = HSHM_NS::circular_mpsc_queue<T, ALLOC_T>;      \
+  template <typename T>                                                      \
+  using circular_spsc_queue = HSHM_NS::circular_spsc_queue<T, ALLOC_T>;      \
+  template <typename T>                                                      \
+  using ext_ring_buffer = HSHM_NS::ext_ring_buffer<T, ALLOC_T>;              \
                                                                              \
   template <typename T>                                                      \
   using spsc_ptr_queue = HSHM_NS::spsc_ptr_queue<T, ALLOC_T>;                \
@@ -76,6 +81,13 @@
   using fixed_spsc_ptr_queue = HSHM_NS::fixed_spsc_ptr_queue<T, ALLOC_T>;    \
   template <typename T>                                                      \
   using fixed_mpsc_ptr_queue = HSHM_NS::fixed_mpsc_ptr_queue<T, ALLOC_T>;    \
+  template <typename T>                                                      \
+  using circular_mpsc_ptr_queue =                                            \
+      HSHM_NS::circular_mpsc_ptr_queue<T, ALLOC_T>;                          \
+  template <typename T>                                                      \
+  using circular_spsc_ptr_queue = HSHM_NS::circular_spsc_queue<T, ALLOC_T>;  \
+  template <typename T>                                                      \
+  using ext_ptr_ring_buffer = HSHM_NS::ext_ring_buffer<T, ALLOC_T>;          \
                                                                              \
   template <typename T>                                                      \
   using slist = HSHM_NS::slist<T, ALLOC_T>;                                  \

@@ -384,9 +384,7 @@ class vector : public ShmContainer {
   template <bool IS_ASSIGN>
   HSHM_CROSS_FUN void shm_move_op(const hipc::CtxAllocator<AllocT> &alloc,
                                   vector &&other) noexcept {
-    if constexpr (IS_ASSIGN) {
-      shm_destroy();
-    } else {
+    if constexpr (!IS_ASSIGN) {
       init_shm_container(alloc);
     }
     if (GetAllocator() == other.GetAllocator()) {
@@ -512,6 +510,23 @@ class vector : public ShmContainer {
     }
     HSHM_MAKE_AR(vec[length_], GetCtxAllocator(), std::forward<Args>(args)...)
     ++length_;
+  }
+
+  /** Assign elements to vector using iterator */
+  template <typename Iterator>
+  HSHM_INLINE_CROSS_FUN void assign(Iterator first, Iterator last) {
+    for (auto iter = first; iter != last; ++iter) {
+      emplace_back(*iter);
+    }
+  }
+
+  /** Assign elements to vector using iterator up to maximum size */
+  template <typename Iterator>
+  HSHM_INLINE_CROSS_FUN void assign(Iterator first, Iterator last,
+                                    int max_count) {
+    for (auto iter = first; iter != last && size() < max_count; ++iter) {
+      emplace_back(*iter);
+    }
   }
 
   /** Construct an element in the front of the vector */

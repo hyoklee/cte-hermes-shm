@@ -57,15 +57,7 @@ class MemoryBackendFactory {
   template <typename BackendT, typename... Args>
   static MemoryBackend *shm_init(const MemoryBackendId &backend_id, size_t size,
                                  Args... args) {
-    // HSHM_CREATE_BACKEND(PosixShmMmap)
-    if constexpr (std::is_same_v<PosixShmMmap, BackendT>) {
-      auto alloc = HSHM_ROOT_ALLOC;
-      auto backend = alloc->template NewObj<PosixShmMmap>(HSHM_DEFAULT_MEM_CTX);
-      if (!backend->shm_init(backend_id, size, std::forward<Args>(args)...)) {
-        HSHM_THROW_ERROR(MEMORY_BACKEND_CREATE_FAILED);
-      }
-      return backend;
-    }
+    HSHM_CREATE_BACKEND(PosixShmMmap)
 #ifdef HSHM_ENABLE_CUDA
     HSHM_CREATE_BACKEND(CudaShmMmap)
     HSHM_CREATE_BACKEND(CudaMalloc)
@@ -107,79 +99,6 @@ class MemoryBackendFactory {
       default:
         return nullptr;
     }
-  }
-
-  /** Deserialize an existing backend */
-  HSHM_CROSS_FUN
-  static MemoryBackend *shm_attach(MemoryBackend *backend) {
-    switch (backend->header_->type_) {
-      // Posix Mmap
-      case MemoryBackendType::kPosixMmap: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<PosixMmap>(HSHM_DEFAULT_MEM_CTX,
-                                     *(PosixMmap *)backend)
-            .ptr_;
-      }
-
-        // Malloc
-      case MemoryBackendType::kMallocBackend: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<MallocBackend>(HSHM_DEFAULT_MEM_CTX,
-                                         *(MallocBackend *)backend)
-            .ptr_;
-      }
-
-        // Array
-      case MemoryBackendType::kArrayBackend: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<ArrayBackend>(HSHM_DEFAULT_MEM_CTX,
-                                        *(ArrayBackend *)backend)
-            .ptr_;
-      }
-
-#ifdef HSHM_ENABLE_CUDA
-        // Cuda Malloc
-      case MemoryBackendType::kCudaMalloc: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<CudaMalloc>(HSHM_DEFAULT_MEM_CTX,
-                                      *(CudaMalloc *)backend)
-            .ptr_;
-      }
-
-        // Cuda Shm Mmap
-      case MemoryBackendType::kCudaShmMmap: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<CudaShmMmap>(HSHM_DEFAULT_MEM_CTX,
-                                       *(CudaShmMmap *)backend)
-            .ptr_;
-      }
-#endif
-
-#ifdef HSHM_ENABLE_ROCM
-        // Rocm Malloc
-      case MemoryBackendType::kRocmMalloc: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<RocmMalloc>(HSHM_DEFAULT_MEM_CTX,
-                                      *(RocmMalloc *)backend)
-            .ptr_;
-      }
-
-        // Rocm Shm Mmap
-      case MemoryBackendType::kRocmShmMmap: {
-        return HSHM_ROOT_ALLOC
-            ->NewObjLocal<RocmShmMmap>(HSHM_DEFAULT_MEM_CTX,
-                                       *(RocmShmMmap *)backend)
-            .ptr_;
-      }
-#endif
-
-        // Default
-      default: {
-        HSHM_THROW_ERROR(MEMORY_BACKEND_NOT_FOUND);
-      }
-    }
-
-    return nullptr;
   }
 };
 

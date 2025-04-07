@@ -57,14 +57,13 @@ class _MallocAllocator : public Allocator {
    * Initialize the allocator in shared memory
    * */
   HSHM_CROSS_FUN
-  void shm_init(AllocatorId id, size_t custom_header_size, char *buffer,
-                size_t buffer_size) {
-    (void)buffer;
+  void shm_init(AllocatorId id, size_t custom_header_size,
+                MemoryBackend backend) {
     type_ = AllocatorType::kMallocAllocator;
     id_ = id;
     buffer_ = nullptr;
-    buffer_size_ = buffer_size;
-    header_ = reinterpret_cast<_MallocAllocatorHeader *>(
+    buffer_size_ = std::numeric_limits<size_t>::max();
+    header_ = ConstructHeader<_MallocAllocatorHeader>(
         malloc(sizeof(_MallocAllocatorHeader) + custom_header_size));
     custom_header_ = reinterpret_cast<char *>(header_ + 1);
     header_->Configure(id, custom_header_size);
@@ -74,7 +73,7 @@ class _MallocAllocator : public Allocator {
    * Attach an existing allocator from shared memory
    * */
   HSHM_CROSS_FUN
-  void shm_deserialize(char *buffer, size_t buffer_size) {
+  void shm_deserialize(MemoryBackend backend) {
     HSHM_THROW_ERROR(NOT_IMPLEMENTED, "_MallocAllocator::shm_deserialize");
   }
 

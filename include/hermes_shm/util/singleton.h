@@ -23,6 +23,11 @@ namespace hshm {
 /**
  * A class to represent singleton pattern
  * Does not require specific initialization of the static variable
+ *
+ * NOTE(llogan): Python does NOT play well with this singleton.
+ * I find that it will duplicate the singleton when loading wrapper
+ * functions. It is very strange, but this one should be avoided for
+ * codes that plan to be called by python.
  * */
 template <typename T, bool WithLock>
 class SingletonBase {
@@ -137,20 +142,76 @@ T GlobalSingleton<T>::obj_;
  * */
 #ifdef HSHM_IS_HOST
 template <typename T>
-class GlobalCrossSingleton {
- private:
-  static T obj_;
-
- public:
-  GlobalCrossSingleton() = default;
-
-  static T *GetInstance() { return &obj_; }
-};
-template <typename T>
-T GlobalCrossSingleton<T>::obj_;
+using GlobalCrossSingleton = GlobalSingleton<T>;
 #else
 template <typename T>
 using GlobalCrossSingleton = LockfreeCrossSingleton<T>;
+#endif
+
+/**
+ * C-style singleton with global variables
+ */
+#define HSHM_DEFINE_GLOBAL_VAR_H(T, NAME) extern __TU(T) NAME;
+#define HSHM_DEFINE_GLOBAL_VAR_CC(T, NAME) __TU(T) NAME = T{};
+#define HSHM_GET_GLOBAL_VAR(T, NAME) hshm::GetGlobalVar<__TU(T)>(NAME)
+template <typename T>
+static inline T *GetGlobalVar(T &instance) {
+  return &instance;
+}
+
+/**
+ * Cross-device C-style singleton with global variables
+ */
+#ifdef HSHM_IS_HOST
+#define HSHM_DEFINE_GLOBAL_CROSS_VAR_H(T, NAME) extern __TU(T) NAME;
+#define HSHM_DEFINE_GLOBAL_CROSS_VAR_CC(T, NAME) __TU(T) NAME = T{};
+#define HSHM_GET_GLOBAL_CROSS_VAR(T, NAME) \
+  hshm::GetGlobalCrossVar<__TU(T)>(NAME)
+template <typename T>
+HSHM_CROSS_FUN static inline T *GetGlobalCrossVar(T &instance) {
+  return &instance;
+}
+#else
+#define HSHM_DEFINE_GLOBAL_CROSS_VAR_H(T, NAME)
+#define HSHM_DEFINE_GLOBAL_CROSS_VAR_CC(T, NAME)
+#define HSHM_GET_GLOBAL_CROSS_VAR(T, NAME) \
+  hshm::CrossSingleton<__TU(T)>::GetInstance()
+#endif
+
+/**
+ * C-style pointer singleton with global variables
+ */
+#define HSHM_DEFINE_GLOBAL_PTR_VAR_H(T, NAME) extern __TU(T) * NAME;
+#define HSHM_DEFINE_GLOBAL_PTR_VAR_CC(T, NAME) __TU(T) *NAME = nullptr;
+#define HSHM_GET_GLOBAL_PTR_VAR(T, NAME) hshm::GetGlobalPtrVar<__TU(T)>(NAME)
+template <typename T>
+static inline T *GetGlobalPtrVar(T *&instance) {
+  if (instance == nullptr) {
+    instance = new T();
+  }
+  return instance;
+}
+
+/**
+ * Cross-device C-style pointer singleton with global variables
+ */
+#ifdef HSHM_IS_HOST
+#define HSHM_DEFINE_GLOBAL_CROSS_PTR_VAR_H(T, NAME) extern __TU(T) * NAME;
+#define HSHM_DEFINE_GLOBAL_CROSS_PTR_VAR_CC(T, NAME) __TU(T) *NAME = nullptr;
+#define HSHM_GET_GLOBAL_CROSS_PTR_VAR(T, NAME) \
+  hshm::GetGlobalCrossPtrVar<__TU(T)>(NAME)
+template <typename T>
+HSHM_CROSS_FUN static inline T *GetGlobalCrossPtrVar(T *&instance) {
+  if (instance == nullptr) {
+    instance = new T();
+  }
+  return instance;
+}
+#else
+#define HSHM_DEFINE_GLOBAL_CROSS_PTR_VAR_H(T, NAME)
+#define HSHM_DEFINE_GLOBAL_CROSS_PTR_VAR_CC(T, NAME)
+#define HSHM_GET_GLOBAL_CROSS_PTR_VAR(T, NAME) \
+  hshm::CrossSingleton<__TU(T)>::GetInstance()
 #endif
 
 }  // namespace hshm

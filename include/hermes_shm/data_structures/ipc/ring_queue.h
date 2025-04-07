@@ -10,13 +10,13 @@
 #include "hermes_shm/thread/lock.h"
 #include "hermes_shm/types/qtok.h"
 #include "pair.h"
+#include "ring_queue_flags.h"
 #include "vector.h"
 
 namespace hshm::ipc {
 
 /** Forward declaration of ring_queue_base */
-template <typename T, bool IsPushAtomic, bool IsPopAtomic, bool HasFixedReqs,
-          HSHM_CLASS_TEMPL_WITH_DEFAULTS>
+template <typename T, RingQueueFlag RQ_FLAGS, HSHM_CLASS_TEMPL_WITH_DEFAULTS>
 class ring_queue_base;
 
 /**
@@ -24,22 +24,20 @@ class ring_queue_base;
  * Used as inputs to the HIPC_CONTAINER_TEMPLATE
  * */
 #define CLASS_NAME ring_queue_base
-#define CLASS_NEW_ARGS T, IsPushAtomic, IsPopAtomic, HasFixedReqs
+#define CLASS_NEW_ARGS T, RQ_FLAGS
 
 /**
  * A queue optimized for multiple producers (emplace) with a single
  * consumer (pop).
  * @param T The type of the data to store in the queue
- * @param IsPushAtomic If true, the push operation is atomic (thread-safe)
- * @param IsPopAtomic If true, the pop operation is atomic (thread-safe)
- * @param HasFixedReqs If true, the queue is guaranteed to push/pop a fixed
+ * @param RQ_FLAGS Configuration flags
  * number of requests.
  * */
-template <typename T, bool IsPushAtomic, bool IsPopAtomic, bool HasFixedReqs,
-          HSHM_CLASS_TEMPL>
+template <typename T, RingQueueFlag RQ_FLAGS, HSHM_CLASS_TEMPL>
 class ring_queue_base : public ShmContainer {
  public:
   HIPC_CONTAINER_TEMPLATE((CLASS_NAME), (CLASS_NEW_ARGS))
+  RING_QUEUE_DEFS
 
  public:
   /**====================================
@@ -150,9 +148,7 @@ class ring_queue_base : public ShmContainer {
   template <bool IS_ASSIGN>
   HSHM_CROSS_FUN void shm_move_op(const hipc::CtxAllocator<AllocT> &alloc,
                                   ring_queue_base &&other) noexcept {
-    if constexpr (IS_ASSIGN) {
-      shm_destroy();
-    } else {
+    if constexpr (!IS_ASSIGN) {
       init_shm_container(alloc);
     }
     if (GetAllocator() == other.GetAllocator()) {
@@ -191,7 +187,14 @@ class ring_queue_base : public ShmContainer {
 
   /** Resize */
   HSHM_CROSS_FUN
-  void resize(size_t new_depth) { queue_->resize(new_depth); }
+  void resize(size_t new_depth) {
+    ring_queue_base new_queue(GetCtxAllocator(), new_depth);
+    T val;
+    while (!pop(val).IsNull()) {
+      new_queue.push(val);
+    }
+    (*this) = std::move(new_queue);
+  }
 
   /** Resize (wrapper) */
   HSHM_INLINE_CROSS_FUN
@@ -203,29 +206,32 @@ class ring_queue_base : public ShmContainer {
     // Allocate a slot in the queue
     // The slot is marked NULL, so pop won't do anything if context switch
     qtok_id head = head_.load();
-    qtok_id tail = tail_.fetch_add(1);
+    qtok_id tail = tail_.fetch_add(qtok_id(1));
     vector_t &queue = (*queue_);
 
     // Check if there's space in the queue.
-    if constexpr (IsPushAtomic) {
-      if constexpr (!HasFixedReqs) {
-        size_t size = tail - head + 1;
-        if (size > queue.size()) {
-          while (true) {
-            head = head_.load();
-            size = tail - head + 1;
-            if (size <= GetDepth()) {
-              break;
-            }
-            HSHM_THREAD_MODEL->Yield();
+    if constexpr (WaitForSpace) {
+      size_t size = tail - head + 1;
+      if (size > queue.size()) {
+        while (true) {
+          head = head_.load();
+          size = tail - head + 1;
+          if (size <= GetDepth()) {
+            break;
           }
+          HSHM_THREAD_MODEL->Yield();
         }
       }
-    } else {
+    } else if constexpr (ErrorOnNoSpace) {
       qtok_id size = tail - head + 1;
       if (size > queue.size()) {
         tail_.fetch_sub(1);
         return qtok_t::GetNull();
+      }
+    } else if constexpr (DynamicSize) {
+      size_t size = tail - head + 1;
+      if (size > queue.size()) {
+        resize(queue.size() * 2);
       }
     }
 
@@ -316,46 +322,49 @@ class ring_queue_base : public ShmContainer {
     }
   }
 
-  /** Consumer peeks an object */
+  /** Consumer peeks an object pair by qtoken */
   HSHM_CROSS_FUN
-  qtok_t peek(T *&val, int off = 0) {
-    // Don't pop if there's no entries
-    qtok_id head = head_.load() + off;
+  qtok_t peek(pair_t *&entry, const qtok_t &tok) {
     qtok_id tail = tail_.load();
-    if (head >= tail) {
+    if (tok.IsNull() || tok.id_ >= tail) {
       return qtok_t::GetNull();
     }
 
     // Pop the element, but only if it's marked valid
-    qtok_id idx = (head) % (*queue_).size();
-    pair_t &entry = (*queue_)[idx];
-    if (entry.GetFirst().Any(1)) {
-      val = &entry.GetSecond();
-      return qtok_t(head);
+    qtok_id idx = tok.id_ % (*queue_).size();
+    entry = &(*queue_)[idx];
+    if (entry->GetFirst().Any(1)) {
+      return tok;
     } else {
       return qtok_t::GetNull();
     }
   }
 
+  /** Consumer peeks an object by qtoken */
+  HSHM_CROSS_FUN
+  qtok_t peek(T *&val, const qtok_t &tok) {
+    // Don't pop if there's no entries
+    pair_t *entry;
+    qtok_t test = peek(entry, tok);
+    if (test.IsNull()) {
+      return test;
+    }
+    val = &entry->GetSecond();
+    return test;
+  }
+
   /** Consumer peeks an object */
   HSHM_CROSS_FUN
-  qtok_t peek(pair_t *&val, int off = 0) {
-    // Don't pop if there's no entries
-    qtok_id head = head_.load() + off;
-    qtok_id tail = tail_.load();
-    if (head >= tail) {
-      return qtok_t::GetNull();
-    }
+  qtok_t peek(T *&val, int off = 0) {
+    qtok_t tok(head_.load() + off);
+    return peek(val, tok);
+  }
 
-    // Pop the element, but only if it's marked valid
-    qtok_id idx = (head) % (*queue_).size();
-    pair_t &entry = (*queue_)[idx];
-    if (entry.GetFirst().Any(1)) {
-      val = &entry;
-      return qtok_t(head);
-    } else {
-      return qtok_t::GetNull();
-    }
+  /** Consumer peeks an object pair */
+  HSHM_CROSS_FUN
+  qtok_t peek(pair_t *&val, int off = 0) {
+    qtok_t tok(head_.load() + off);
+    return peek(val, tok);
   }
 
   /** Get queue depth */
@@ -382,16 +391,6 @@ class ring_queue_base : public ShmContainer {
   size_t Size() { return GetSize(); }
 };
 
-// bool IsPushAtomic,
-// bool IsPopAtomic,
-// bool HasFixedReqs,
-#define RING_BUFFER_FLAGS bool IsPushAtomic, bool IsPopAtomic, bool HasFixedReqs
-#define RING_BUFFER_FLAGS_ARGS IsPushAtomic, IsPopAtomic, HasFixedReqs
-#define RING_BUFFER_MPSC_FLAGS true, false, false
-#define RING_BUFFER_SPSC_FLAGS false, false, false
-#define RING_BUFFER_FIXED_SPSC_FLAGS false, false, true
-#define RING_BUFFER_FIXED_MPMC_FLAGS true, true, true
-
 template <typename T, HSHM_CLASS_TEMPL_WITH_DEFAULTS>
 using mpsc_queue =
     ring_queue_base<T, RING_BUFFER_MPSC_FLAGS, HSHM_CLASS_TEMPL_ARGS>;
@@ -407,6 +406,18 @@ using fixed_spsc_queue =
 template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
 using fixed_mpsc_queue =
     ring_queue_base<T, RING_BUFFER_FIXED_MPMC_FLAGS, HSHM_CLASS_TEMPL_ARGS>;
+
+template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
+using circular_spsc_queue =
+    ring_queue_base<T, RING_BUFFER_CIRCULAR_SPSC_FLAGS, HSHM_CLASS_TEMPL_ARGS>;
+
+template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
+using circular_mpsc_queue =
+    ring_queue_base<T, RING_BUFFER_CIRCULAR_MPMC_FLAGS, HSHM_CLASS_TEMPL_ARGS>;
+
+template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
+using ext_ring_buffer =
+    ring_queue_base<T, RING_BUFFER_EXTENSIBLE_FLAGS, HSHM_CLASS_TEMPL_ARGS>;
 
 }  // namespace hshm::ipc
 
@@ -427,6 +438,20 @@ using fixed_spsc_queue = hipc::ring_queue_base<T, RING_BUFFER_FIXED_SPSC_FLAGS,
 template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
 using fixed_mpsc_queue = hipc::ring_queue_base<T, RING_BUFFER_FIXED_MPMC_FLAGS,
                                                HSHM_CLASS_TEMPL_ARGS>;
+
+template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
+using circular_spsc_queue =
+    hipc::ring_queue_base<T, RING_BUFFER_CIRCULAR_SPSC_FLAGS,
+                          HSHM_CLASS_TEMPL_ARGS>;
+
+template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
+using circular_mpsc_queue =
+    hipc::ring_queue_base<T, RING_BUFFER_CIRCULAR_MPMC_FLAGS,
+                          HSHM_CLASS_TEMPL_ARGS>;
+
+template <typename T, HSHM_CLASS_TEMPL_WITH_PRIV_DEFAULTS>
+using ext_ring_buffer = hipc::ring_queue_base<T, RING_BUFFER_EXTENSIBLE_FLAGS,
+                                              HSHM_CLASS_TEMPL_ARGS>;
 
 }  // namespace hshm
 

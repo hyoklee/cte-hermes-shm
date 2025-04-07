@@ -182,7 +182,7 @@ endmacro()
 macro(hshm_enable_rocm GPU_RUNTIME CXX_STANDARD)
     set(GPU_RUNTIME ${GPU_RUNTIME})
     enable_language(${GPU_RUNTIME})
-    set(CMAKE_${GPU_RUNTIME}_STANDARD 17)
+    set(CMAKE_${GPU_RUNTIME}_STANDARD ${CXX_STANDARD})
     set(CMAKE_${GPU_RUNTIME}_EXTENSIONS OFF)
     set(CMAKE_${GPU_RUNTIME}_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --forward-unknown-to-host-compiler")
@@ -364,3 +364,35 @@ function(add_doxygen_doc)
 
     message(STATUS "Added ${DOXY_DOC_TARGET_NAME} [Doxygen] target to build documentation")
 endfunction()
+
+# FIND PYTHON
+macro(find_first_path_python)
+    if(DEFINED ENV{PATH})
+        string(REPLACE ":" ";" PATH_LIST $ENV{PATH})
+
+        foreach(PATH_ENTRY ${PATH_LIST})
+            find_program(PYTHON_SCAN
+                NAMES python3 python
+                PATHS ${PATH_ENTRY}
+                NO_DEFAULT_PATH
+            )
+
+            if(PYTHON_SCAN)
+                message(STATUS "Found Python in PATH: ${PYTHON_SCAN}")
+                set(Python3_EXECUTABLE ${PYTHON_SCAN})
+                set(Python3_ROOT_DIR ${PATH_ENTRY})
+                set(Python3_ROOT ${PATH_ENTRY})
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    set(Python_FIND_STRATEGY LOCATION)
+    find_package(Python3 COMPONENTS Interpreter Development)
+
+    if(Python3_FOUND)
+        message(STATUS "Found Python3: ${Python3_EXECUTABLE}")
+    else()
+        message(FATAL_ERROR "Python3 not found")
+    endif()
+endmacro()

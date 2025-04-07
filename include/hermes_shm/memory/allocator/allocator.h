@@ -16,6 +16,7 @@
 #include <cstdint>
 
 #include "hermes_shm/constants/macros.h"
+#include "hermes_shm/memory/backend/memory_backend.h"
 #include "hermes_shm/memory/memory.h"
 #include "hermes_shm/thread/thread_model/thread_model.h"
 #include "hermes_shm/types/numbers.h"
@@ -29,6 +30,8 @@ namespace hshm::ipc {
  * */
 enum class AllocatorType {
   kStackAllocator,
+  kGpuStackAllocator,
+  kSliceAllocator,
   kMallocAllocator,
   kFixedPageAllocator,
   kScalablePageAllocator,
@@ -114,6 +117,15 @@ class Allocator {
   const AllocatorId &GetId() const { return id_; }
 
   /**
+   * Construct custom header
+   */
+  template <typename HEADER_T>
+  HSHM_INLINE_CROSS_FUN HEADER_T *ConstructHeader(void *buffer) {
+    new ((HEADER_T *)buffer) HEADER_T();
+    return reinterpret_cast<HEADER_T *>(buffer);
+  }
+
+  /**
    * Get the custom header of the shared-memory allocator
    *
    * @return Custom header pointer
@@ -160,8 +172,10 @@ class Allocator {
    * @return True or false
    * */
   template <typename T = void>
-  HSHM_INLINE_CROSS_FUN bool ContainsPtr(T *ptr) {
-    return reinterpret_cast<size_t>(ptr) >= reinterpret_cast<size_t>(buffer_);
+  HSHM_INLINE_CROSS_FUN bool ContainsPtr(const T *ptr) {
+    return reinterpret_cast<size_t>(buffer_) <= reinterpret_cast<size_t>(ptr) &&
+           reinterpret_cast<size_t>(ptr) <
+               reinterpret_cast<size_t>(buffer_) + buffer_size_;
   }
 
   /** Print */
@@ -265,8 +279,8 @@ class BaseAllocator : public CoreAllocT {
    * Deserialize allocator from a buffer.
    * */
   HSHM_CROSS_FUN
-  void shm_deserialize(char *buffer, size_t buffer_size) {
-    CoreAllocT::shm_deserialize(buffer, buffer_size);
+  void shm_deserialize(const MemoryBackend &backend) {
+    CoreAllocT::shm_deserialize(backend);
   }
 
   /**====================================
@@ -1067,7 +1081,7 @@ class BaseAllocator : public CoreAllocT {
    * @return True or false
    * */
   template <typename T = void>
-  HSHM_INLINE_CROSS_FUN bool ContainsPtr(T *ptr) {
+  HSHM_INLINE_CROSS_FUN bool ContainsPtr(const T *ptr) {
     return CoreAllocT::template ContainsPtr<T>(ptr);
   }
 

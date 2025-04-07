@@ -1,7 +1,3 @@
-// #include "hermes_shm/data_structures/all.h"
-//
-// typedef HSHM_NS::Allocator ALLOC_T;
-
 namespace NS {
 template <int LENGTH, bool WithNull>
 using chararr_templ = HSHM_NS::chararr_templ<LENGTH, WithNull>;
@@ -32,7 +28,11 @@ using fixed_spsc_queue = HSHM_NS::fixed_spsc_queue<T, ALLOC_T>;
 template <typename T>
 using fixed_mpsc_queue = HSHM_NS::fixed_mpsc_queue<T, ALLOC_T>;
 template <typename T>
-using fixed_mpmc_queue = HSHM_NS::fixed_mpmc_queue<T, ALLOC_T>;
+using circular_mpsc_queue = HSHM_NS::circular_mpsc_queue<T, ALLOC_T>;
+template <typename T>
+using circular_spsc_queue = HSHM_NS::circular_spsc_queue<T, ALLOC_T>;
+template <typename T>
+using ext_ring_buffer = HSHM_NS::ext_ring_buffer<T, ALLOC_T>;
 
 template <typename T>
 using spsc_ptr_queue = HSHM_NS::spsc_ptr_queue<T, ALLOC_T>;
@@ -43,7 +43,11 @@ using fixed_spsc_ptr_queue = HSHM_NS::fixed_spsc_ptr_queue<T, ALLOC_T>;
 template <typename T>
 using fixed_mpsc_ptr_queue = HSHM_NS::fixed_mpsc_ptr_queue<T, ALLOC_T>;
 template <typename T>
-using fixed_mpmc_ptr_queue = HSHM_NS::fixed_mpmc_ptr_queue<T, ALLOC_T>;
+using circular_mpsc_ptr_queue = HSHM_NS::circular_mpsc_ptr_queue<T, ALLOC_T>;
+template <typename T>
+using circular_spsc_ptr_queue = HSHM_NS::circular_spsc_queue<T, ALLOC_T>;
+template <typename T>
+using ext_ptr_ring_buffer = HSHM_NS::ext_ring_buffer<T, ALLOC_T>;
 
 template <typename T>
 using slist = HSHM_NS::slist<T, ALLOC_T>;

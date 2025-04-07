@@ -90,7 +90,7 @@ namespace hshm {
 class Logger {
  public:
   FILE *fout_;
-  bool disabled_[HSHM_MAX_LOGGING_CODES] = {0};
+  bool disabled_[HSHM_MAX_LOGGING_CODES];
 
  public:
   HSHM_CROSS_FUN
@@ -123,7 +123,7 @@ class Logger {
 
   HSHM_CROSS_FUN
   void DisableCode(int code) {
-    if (code < HSHM_MAX_LOGGING_CODES) {
+    if (code >= 0 && code < HSHM_MAX_LOGGING_CODES) {
       disabled_[code] = true;
     }
   }
