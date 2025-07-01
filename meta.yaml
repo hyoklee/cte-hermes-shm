@@ -1,0 +1,30 @@
+package:
+  name: hshm
+  version: 0.0.0
+
+source:
+#  git_url: https://github.com/hyoklee/cte-hermes-shm
+#  git_depth: 1
+  path: .
+
+requirements:
+  build:
+    - autoconf
+    - boost
+    - catch2
+    - cereal
+  run:
+    - python
+test:
+  requires:
+    - autoconf
+    - boost
+    - catch2
+    - cereal
+  commands:
+    - pip --help
+
+about:
+  home: https://grc.iit.edu/research/projects/iowarp/
+  license: BSD
+  summary: IOWarp hshm Conda Package
