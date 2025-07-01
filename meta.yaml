@@ -13,6 +13,7 @@ requirements:
     - boost
     - catch2
     - cereal
+    - iowarp::scspkg
   run:
     - python
 test:
@@ -21,6 +22,7 @@ test:
     - boost
     - catch2
     - cereal
+    - iowarp::scspkg    
   commands:
     - pip --help
 
