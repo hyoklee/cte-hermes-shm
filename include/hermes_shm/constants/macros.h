@@ -24,7 +24,7 @@
 #endif
 
 /** Function content selector for ROCm */
-#ifdef __HIP_DEVICE_COMPILE__
+#if __HIP_DEVICE_COMPILE__
 #define HSHM_IS_ROCM_GPU
 #endif
 
@@ -40,8 +40,8 @@
 #define HSHM_DLL_EXPORT __declspec(dllexport)
 #define HSHM_DLL_IMPORT __declspec(dllimport)
 #else
-#define HSHM_DLL_EXPORT  // __attribute__((visibility("default")))
-#define HSHM_DLL_IMPORT  // __attribute__((visibility("default")))
+#define HSHM_DLL_EXPORT __attribute__((visibility("default")))
+#define HSHM_DLL_IMPORT __attribute__((visibility("default")))
 #endif
 
 // The following should be set internally in HSHM source files.
@@ -82,6 +82,10 @@
 #define VANISH
 #define __TU(X) TYPE_UNWRAP(X)
 
+#if defined(HSHM_ENABLE_CUDA) or defined(HSHM_ENABLE_ROCM)
+#define HSHM_ENABLE_CUDA_OR_ROCM
+#endif
+
 /** Includes for CUDA and ROCm */
 #ifdef HSHM_ENABLE_CUDA
 #include <cuda_runtime.h>
@@ -111,6 +115,16 @@
       hipError_t hipErr = hipGetLastError();                                \
       HELOG(kFatal, "HIP Error {}: {}", hipErr, hipGetErrorString(hipErr)); \
     }                                                                       \
+  } while (false)
+
+/** Error checking for CUDA */
+#define CUDA_ERROR_CHECK(X)                       \
+  do {                                            \
+    if (X != cudaSuccess) {                       \
+      cudaError_t cudaErr = cudaGetLastError();   \
+      HELOG(kFatal, "CUDA Error {}: {}", cudaErr, \
+            cudaGetErrorString(cudaErr));         \
+    }                                             \
   } while (false)
 
 /**
@@ -172,8 +186,13 @@
 #define CLS_CROSS_CONST CLS_CONST
 
 /** Class constant macro */
+#ifdef HSHM_IS_HOST
 #define GLOBAL_CONST inline const
 #define GLOBAL_CROSS_CONST inline const
+#else
+#define GLOBAL_CONST inline const
+#define GLOBAL_CROSS_CONST inline const __device__ __constant__
+#endif
 
 /** Namespace definitions */
 namespace hshm {}
@@ -225,7 +244,7 @@ namespace hipc = hshm::ipc;
 #if defined(HSHM_ENABLE_PTHREADS)
 #define HSHM_DEFAULT_THREAD_MODEL hshm::thread::Pthread
 #elif defined(HSHM_ENABLE_WINDOWS_THREADS)
-#define HSHM_DEFAULT_THREAD_MODEL hshm::thread::WindowsThread
+#define HSHM_DEFAULT_THREAD_MODEL hshm::thread::StdThread
 #endif
 #endif
 

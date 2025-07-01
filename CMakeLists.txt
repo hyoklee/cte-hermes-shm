@@ -19,8 +19,8 @@ add_compile_definitions(_CRT_SECURE_NO_DEPRECATE)
 # ------------------------------------------------------------------------------
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
-option(BUILD_HSHM_TESTS "Build tests" ON)
-option(BUILD_HSHM_BENCHMARKS "Build benchmarks" OFF)
+option(HSHM_BUILD_TESTS "Build tests" ON)
+option(HSHM_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(HSHM_ENABLE_CMAKE_DOTENV "Build benchmarks" OFF)
 
 option(HSHM_ENABLE_MPI "Enable MPI support" OFF)
@@ -35,7 +35,7 @@ option(HSHM_ENABLE_PTHREADS "Support spawning pthreads" OFF)
 option(HSHM_DEBUG_LOCK "Used for debugging locks" OFF)
 option(HSHM_ENABLE_COMPRESS "Enable compression" OFF)
 option(HSHM_ENABLE_ENCRYPT "Enable encryption" OFF)
-option(HSHM_USE_ELF "Enable elf" OFF)
+option(HSHM_ENABLE_ELF "Enable elf" OFF)
 option(HSHM_ENABLE_CUDA "Enable CUDA support" OFF)
 option(HSHM_ENABLE_ROCM "Enable ROCm support" OFF)
 option(HSHM_NO_COMPILE "Disable compiling / installing this library" OFF)
@@ -195,62 +195,6 @@ if(HSHM_ENABLE_PTHREADS)
     target_link_libraries(host_deps INTERFACE pthread)
 endif()
 
-# CUDA (GPU) LIB DEPS
-add_library(cuda_gpu_lib_deps INTERFACE)
-add_library(hshm::cuda_gpu_lib_deps ALIAS cuda_gpu_lib_deps)
-
-if(HSHM_ENABLE_CUDA)
-    target_link_libraries(cuda_gpu_lib_deps INTERFACE host_deps)
-    target_compile_definitions(cuda_gpu_lib_deps INTERFACE HSHM_ENABLE_CUDA)
-    target_compile_options(cuda_gpu_lib_deps INTERFACE
-        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
-endif()
-
-# CUDA (GPU) EXEC DEPS
-add_library(cuda_gpu_exec_deps INTERFACE)
-add_library(hshm::cuda_gpu_exec_deps ALIAS cuda_gpu_exec_deps)
-
-if(HSHM_ENABLE_CUDA)
-    target_link_libraries(cuda_gpu_exec_deps INTERFACE cuda_gpu_lib_deps)
-endif()
-
-# ROCM (GPU) LIB DEPS
-add_library(rocm_gpu_lib_deps INTERFACE)
-add_library(hshm::rocm_gpu_lib_deps ALIAS rocm_gpu_lib_deps)
-
-if(HSHM_ENABLE_ROCM)
-    target_link_libraries(rocm_gpu_lib_deps INTERFACE -fgpu-rdc host_deps)
-    target_compile_options(rocm_gpu_lib_deps INTERFACE -fgpu-rdc)
-    target_compile_definitions(rocm_gpu_lib_deps INTERFACE HSHM_ENABLE_ROCM)
-
-    # target_include_directories(rocm_gpu_lib_deps INTERFACE ${CMAKE_PREFIX_PATH}/hsa/include)
-endif()
-
-# ROCM (HOST) LIB DEPS
-add_library(rocm_host_lib_deps INTERFACE)
-add_library(hshm::rocm_host_lib_deps ALIAS rocm_host_lib_deps)
-
-if(HSHM_ENABLE_ROCM)
-    target_link_libraries(rocm_host_lib_deps INTERFACE host_deps)
-endif()
-
-# ROCM (HOST) EXEC DEPS
-add_library(rocm_host_exec_deps INTERFACE)
-add_library(hshm::rocm_host_exec_deps ALIAS rocm_host_exec_deps)
-
-if(HSHM_ENABLE_ROCM)
-    # target_link_libraries(rocm_host_exec_deps INTERFACE rocm_host_lib_deps amdhip64 amd_comgr)
-    target_link_libraries(rocm_host_exec_deps INTERFACE rocm_host_lib_deps)
-endif()
-
-# ROCM (GPU) EXEC DEPS
-add_library(rocm_gpu_exec_deps INTERFACE)
-add_library(hshm::rocm_gpu_exec_deps ALIAS rocm_gpu_exec_deps)
-
-if(HSHM_ENABLE_ROCM)
-    target_link_libraries(rocm_gpu_exec_deps INTERFACE rocm_gpu_lib_deps amdhip64 amd_comgr)
-endif()
-
 # -----------------------------------------------------------------------------
 # Documentation
 # -----------------------------------------------------------------------------
@@ -302,12 +246,12 @@ endif()
 set(TEST_MAIN ${HSHM_ROOT}/test/unit)
 enable_testing()
 
-if(BUILD_HSHM_TESTS)
+if(HSHM_BUILD_TESTS)
     message("Building HSHM unit tests")
     add_subdirectory(test)
 endif()
 
-if(BUILD_HSHM_BENCHMARKS)
+if(HSHM_BUILD_BENCHMARKS)
     message("Building HSHM benchmarks")
     add_subdirectory(benchmark)
 endif()

@@ -12,45 +12,50 @@
 #include "hermes_shm/memory/allocator/allocator.h"
 #include "hermes_shm/memory/backend/posix_mmap.h"
 #include "hermes_shm/types/numbers.h"
+#include "hermes_shm/util/gpu_api.h"
 #include "hermes_shm/util/singleton.h"
 
 namespace hshm::ipc {
 
+/** Max # of GPUs mem mngr can hold */
+#define HSHM_MAX_GPUS 16
+
 /** Max # of allocator the mem mngr can hold */
-#define MAX_ALLOCATORS 64
+#define HSHM_MAX_ALLOCATORS 64
 
 /** Max number of memory backends that can be mounted */
-#define MAX_BACKENDS 16
+#define HSHM_MAX_BACKENDS 16
 
 /** Memory manager class */
 class MemoryManager {
  public:
+  char root_alloc_data_[hshm::Unit<size_t>::Kilobytes(64)];
+  char root_backend_space_[256];
+  char root_alloc_space_[256];
   AllocatorId root_alloc_id_;
   MemoryBackend *root_backend_;
   Allocator *root_alloc_;
-  MemoryBackend *backends_[MAX_BACKENDS];
-  Allocator *allocators_[MAX_ALLOCATORS];
+  MemoryManager **gpu_ptrs_[HSHM_MAX_GPUS];
+  MemoryBackend *backends_[HSHM_MAX_BACKENDS];
+  Allocator *allocators_[HSHM_MAX_ALLOCATORS];
   Allocator *default_allocator_;
-  char root_backend_space_[64];
-  char root_alloc_space_[64];
-  char root_alloc_data_[hshm::Unit<size_t>::Kilobytes(64)];
 
  public:
   /** Create the root allocator */
   HSHM_CROSS_FUN
-  HSHM_DLL MemoryManager();
+  MemoryManager() { Init(); }
 
   /**
    * Initialize memory manager
    * Automatically called in default constructor if on CPU.
    * Must be called explicitly if on GPU.
    * */
-  HSHM_CROSS_FUN
-  HSHM_DLL void Init();
+  template <int nothing = 0>
+  HSHM_CROSS_FUN void Init();
 
   /** Default backend size */
-  HSHM_CROSS_FUN
-  HSHM_DLL static size_t GetDefaultBackendSize();
+  template <int nothing = 0>
+  HSHM_CROSS_FUN static size_t GetDefaultBackendSize();
 
   /**
    * Create a memory backend. Memory backends are divided into slots.
@@ -95,12 +100,29 @@ class MemoryManager {
     return backend;
   }
 
+  /** Copy backends to GPU */
+  template <int nothing = 0>
+  HSHM_INLINE void CopyAllBackendsToGpu();
+
+  /** Copy and existing backend to the GPU */
+  template <int nothing = 0>
+  void CopyBackendGpu(const MemoryBackendId &backend_id);
+
+  /** Create an array backend on the GPU */
+  template <int nothing = 0>
+  void CreateBackendGpu(int gpu_id, const MemoryBackendId &backend_id,
+                        char *accel_data, size_t accel_data_size);
+
+  /** Mark a backend as allocated on GPU */
+  template <int nothing = 0>
+  void SetBackendHasAllocGpu(const MemoryBackendId &backend_id);
+
   /**
    * Attaches to an existing memory backend located at \a url url.
    * */
-  HSHM_CROSS_FUN
-  HSHM_DLL MemoryBackend *AttachBackend(MemoryBackendType type,
-                                        const hshm::chararr &url);
+  template <int nothing = 0>
+  HSHM_CROSS_FUN MemoryBackend *AttachBackend(MemoryBackendType type,
+                                              const hshm::chararr &url);
 
   /**
    * Returns a pointer to a backend that has already been attached.
@@ -121,36 +143,81 @@ class MemoryManager {
   }
 
   /** Free the backend */
-  HSHM_CROSS_FUN HSHM_DLL void DestroyBackend(
-      const MemoryBackendId &backend_id);
+  template <int nothing = 0>
+  HSHM_CROSS_FUN void DestroyBackend(const MemoryBackendId &backend_id);
 
   /**
    * Scans all attached backends for new memory allocators.
    * */
-  HSHM_CROSS_FUN
-  HSHM_DLL void ScanBackends(bool find_allocs = true);
+  template <int nothing = 0>
+  HSHM_CROSS_FUN void ScanBackends();
+
+  /**
+   * Scans all backends on all GPUs for new memory allocators
+   */
+  template <int nothing = 0>
+  HSHM_INLINE void ScanBackendsAllGpu();
+
+  /**
+   * Scans all attached backends on GPU for new memory allocators.
+   * */
+  template <int nothing = 0>
+  HSHM_INLINE void ScanBackendsGpu(int gpu_id);
 
   /**
    * Create and register a memory allocator for a particular backend.
    * */
   template <typename AllocT, typename... Args>
-  AllocT *CreateAllocator(const MemoryBackendId &backend_id,
+  HSHM_INLINE_CROSS_FUN AllocT *CreateAllocator(
+      const MemoryBackendId &backend_id, const AllocatorId &alloc_id,
+      size_t custom_header_size, Args &&...args);
+
+  /** Create an allocator for the GPU */
+  template <typename AllocT, typename... Args>
+  void CreateAllocatorGpu(int gpu_id, const MemoryBackendId &backend_id,
                           const AllocatorId &alloc_id,
                           size_t custom_header_size, Args &&...args);
+
+  /** Create an allocator for the GPU */
+  template <typename AllocT>
+  AllocT *ShareAllocatorGpu(int gpu_id, const AllocatorId &alloc_id);
+
+  /**
+   * Registers an allocator. Used internally by ScanBackends, but may
+   * also be used externally.
+   * */
+  template <int nothing = 0>
+  HSHM_CROSS_FUN Allocator *RegisterAllocator(Allocator *alloc);
 
   /**
    * Registers an allocator. Used internally by ScanBackends, but may
    * also be used externally.
    * */
   HSHM_CROSS_FUN
-  HSHM_DLL Allocator *RegisterAllocator(Allocator *alloc, bool do_scan = true);
+  Allocator *RegisterAllocatorNoScan(Allocator *alloc) {
+    if (alloc == nullptr) {
+      return nullptr;
+    }
+    if (default_allocator_ == nullptr || default_allocator_ == root_alloc_) {
+      if (alloc->GetId().bits_.minor_ == 0) {
+        default_allocator_ = alloc;
+      }
+    }
+    uint32_t idx = alloc->GetId().ToIndex();
+    if (idx > HSHM_MAX_ALLOCATORS) {
+      HILOG(kError, "Allocator index out of range: {}", idx);
+      HSHM_THROW_ERROR(TOO_MANY_ALLOCATORS);
+    }
+    allocators_[idx] = alloc;
+    return alloc;
+  }
 
   /**
    * Registers an internal allocator.
    * */
   HSHM_CROSS_FUN
   Allocator *RegisterSubAllocator(Allocator *alloc) {
-    return RegisterAllocator(alloc, false);
+    return RegisterAllocatorNoScan(alloc);
   }
 
   /**

@@ -34,6 +34,29 @@
 
 namespace hshm {
 
+/** Dynamically load shared libraries */
+struct SharedLibrary {
+  void *handle_;
+
+  SharedLibrary() = default;
+  HSHM_DLL SharedLibrary(const std::string &name);
+  HSHM_DLL ~SharedLibrary();
+
+  // Delete copy operations
+  SharedLibrary(const SharedLibrary &) = delete;
+  SharedLibrary &operator=(const SharedLibrary &) = delete;
+
+  // Move operations
+  HSHM_DLL SharedLibrary(SharedLibrary &&other) noexcept;
+  HSHM_DLL SharedLibrary &operator=(SharedLibrary &&other) noexcept;
+
+  HSHM_DLL void Load(const std::string &name);
+  HSHM_DLL void *GetSymbol(const std::string &name);
+  HSHM_DLL std::string GetError() const;
+
+  bool IsNull() { return handle_ == nullptr; }
+};
+
 /** File wrapper */
 union File {
   int posix_fd_;
@@ -58,7 +81,18 @@ class SystemInfo {
   SystemInfo() { RefreshInfo(); }
 
   HSHM_CROSS_FUN
-  HSHM_DLL void RefreshInfo();
+  void RefreshInfo() {
+#ifdef HSHM_IS_HOST
+    pid_ = GetPid();
+    ncpu_ = GetCpuCount();
+    page_size_ = GetPageSize();
+    uid_ = GetUid();
+    gid_ = GetGid();
+    ram_size_ = GetRamCapacity();
+    cur_cpu_freq_.resize(ncpu_);
+    RefreshCpuFreqKhz();
+#endif
+  }
 
   HSHM_DLL void RefreshCpuFreqKhz();
 

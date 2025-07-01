@@ -31,10 +31,29 @@ class MpiTimer : public Timer {
     MPI_Comm_size(comm_, &nprocs_);
   }
 
-  void Collect() {
+  MpiTimer& Collect() { return CollectAvg(); }
+
+  MpiTimer& CollectMax() {
     MPI_Barrier(comm_);
     double my_nsec = GetNsec();
-    MPI_Reduce(&my_nsec, &time_ns_, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+    MPI_Allreduce(&my_nsec, &time_ns_, 1, MPI_DOUBLE, MPI_MAX, comm_);
+    return *this;
+  }
+
+  MpiTimer& CollectMin() {
+    MPI_Barrier(comm_);
+    double my_nsec = GetNsec();
+    MPI_Allreduce(&my_nsec, &time_ns_, 1, MPI_DOUBLE, MPI_MIN, comm_);
+    return *this;
+  }
+
+  MpiTimer& CollectAvg() {
+    MPI_Barrier(comm_);
+    double my_nsec = GetNsec();
+    double total_time_ns;
+    MPI_Allreduce(&my_nsec, &total_time_ns, 1, MPI_DOUBLE, MPI_SUM, comm_);
+    time_ns_ = total_time_ns / nprocs_;
+    return *this;
   }
 };
 

@@ -9,11 +9,15 @@
 namespace hshm::thread {
 
 /** Represents the generic operations of a thread */
-class WindowsThread : public ThreadModel {
+class StdThread : public ThreadModel {
  public:
   /** Initializer */
   HSHM_INLINE_CROSS_FUN
-  WindowsThread() : ThreadModel(ThreadType::kWindows) {}
+  StdThread() : ThreadModel(ThreadType::kStdThread) {}
+
+  /** Initialize std thread */
+  HSHM_CROSS_FUN
+  void Init() {}
 
   /** Sleep thread for a period of time */
   HSHM_CROSS_FUN
@@ -62,6 +66,30 @@ class WindowsThread : public ThreadModel {
   /** Get the thread model type */
   HSHM_INLINE_CROSS_FUN
   ThreadType GetType() { return type_; }
+
+  /** Create a thread group */
+  HSHM_CROSS_FUN
+  ThreadGroup CreateThreadGroup(const ThreadGroupContext &ctx) {
+    return ThreadGroup{};
+  }
+
+  /** Spawn a thread */
+  template <typename FUNC, typename... Args>
+  HSHM_CROSS_FUN Thread Spawn(ThreadGroup &group, FUNC &&func, Args &&...args) {
+    Thread thread;
+    thread.group_ = group;
+    thread.std_thread_ =
+        std::thread(std::forward<FUNC>(func), std::forward<Args>(args)...);
+    return thread;
+  }
+
+  /** Join a thread */
+  HSHM_CROSS_FUN
+  void Join(Thread &thread) { thread.std_thread_.join(); }
+
+  /** Set CPU affinity for thread */
+  HSHM_CROSS_FUN
+  void SetAffinity(Thread &thread, int cpu_id) {}
 };
 
 }  // namespace hshm::thread

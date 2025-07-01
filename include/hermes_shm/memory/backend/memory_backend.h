@@ -26,13 +26,11 @@ namespace hshm::ipc {
 
 enum class MemoryBackendType {
   kPosixShmMmap,
-  kCudaShmMmap,
-  kCudaMalloc,
   kMallocBackend,
   kArrayBackend,
   kPosixMmap,
-  kRocmMalloc,
-  kRocmShmMmap,
+  kGpuMalloc,
+  kGpuShmMmap,
 };
 
 /** ID for memory backend */
@@ -83,13 +81,15 @@ class MemoryBackendId {
 typedef MemoryBackendId memory_backend_id_t;
 
 struct MemoryBackendHeader {
-  MemoryBackendType type_;
-  MemoryBackendId id_;
   union {
     size_t data_size_;  // For CPU-only backends
     size_t md_size_;    // For CPU+GPU backends
   };
+  MemoryBackendType type_;
+  MemoryBackendId id_;
+  bitfield64_t flags_;
   size_t accel_data_size_;
+  int accel_id_;
 
   HSHM_CROSS_FUN void Print() const {
     printf("(%s) MemoryBackendHeader: type: %d, id: %d, data_size: %lu\n",
@@ -98,9 +98,13 @@ struct MemoryBackendHeader {
   }
 };
 
-#define MEMORY_BACKEND_INITIALIZED BIT_OPT(u32, 0)
-#define MEMORY_BACKEND_OWNED BIT_OPT(u32, 1)
-#define MEMORY_BACKEND_SCANNED BIT_OPT(u32, 2)
+#define MEMORY_BACKEND_INITIALIZED BIT_OPT(u64, 0)
+#define MEMORY_BACKEND_OWNED BIT_OPT(u64, 1)
+#define MEMORY_BACKEND_COPY_GPU BIT_OPT(u64, 2)
+#define MEMORY_BACKEND_MIRROR_GPU BIT_OPT(u64, 3)
+#define MEMORY_BACKEND_HAS_ALLOC BIT_OPT(u64, 4)
+#define MEMORY_BACKEND_HAS_GPU_ALLOC BIT_OPT(u64, 5)
+#define MEMORY_BACKEND_IS_SCANNED BIT_OPT(u64, 6)
 
 class UrlMemoryBackend {};
 
@@ -115,9 +119,10 @@ class MemoryBackend {
     size_t data_size_; /** For CPU-only backends */
     size_t md_size_;   /** For CPU+GPU backends */
   };
+  bitfield64_t flags_;
   char *accel_data_;
   size_t accel_data_size_;
-  ibitfield flags_;
+  int accel_id_;
 
  public:
   HSHM_CROSS_FUN
@@ -150,17 +155,71 @@ class MemoryBackend {
   HSHM_CROSS_FUN
   void UnsetInitialized() { flags_.UnsetBits(MEMORY_BACKEND_INITIALIZED); }
 
-  /** Mark the backend as registered */
+  /** Mark data for GPU copy */
   HSHM_CROSS_FUN
-  void SetScanned() { flags_.SetBits(MEMORY_BACKEND_SCANNED); }
+  void SetCopyGpu() { flags_.SetBits(MEMORY_BACKEND_COPY_GPU); }
 
-  /** Check if the backend is registered */
+  /** Check if data is marked for GPU copy */
   HSHM_CROSS_FUN
-  bool IsScanned() { return flags_.Any(MEMORY_BACKEND_SCANNED); }
+  bool IsCopyGpu() { return flags_.Any(MEMORY_BACKEND_COPY_GPU); }
 
-  /** Mark the backend as unregistered */
+  /** Unmark data for GPU copy */
   HSHM_CROSS_FUN
-  void UnsetScanned() { flags_.UnsetBits(MEMORY_BACKEND_SCANNED); }
+  void UnsetCopyGpu() { flags_.UnsetBits(MEMORY_BACKEND_COPY_GPU); }
+
+  /** Mark data for GPU mirror */
+  HSHM_CROSS_FUN
+  void SetMirrorGpu() { flags_.SetBits(MEMORY_BACKEND_MIRROR_GPU); }
+
+  /** Check if data is marked for GPU mirror */
+  HSHM_CROSS_FUN
+  bool IsMirrorGpu() { return flags_.Any(MEMORY_BACKEND_MIRROR_GPU); }
+
+  /** Unmark data for GPU mirror */
+  HSHM_CROSS_FUN
+  void UnsetMirrorGpu() { flags_.UnsetBits(MEMORY_BACKEND_MIRROR_GPU); }
+
+  /** Mark data as having an allocation */
+  HSHM_CROSS_FUN
+  void SetHasAlloc() { header_->flags_.SetBits(MEMORY_BACKEND_HAS_ALLOC); }
+
+  /** Check if data has an allocation */
+  HSHM_CROSS_FUN
+  bool IsHasAlloc() { return header_->flags_.Any(MEMORY_BACKEND_HAS_ALLOC); }
+
+  /** Unmark data as having an allocation */
+  HSHM_CROSS_FUN
+  void UnsetHasAlloc() { header_->flags_.UnsetBits(MEMORY_BACKEND_HAS_ALLOC); }
+
+  /** Mark data as having a GPU allocation */
+  HSHM_CROSS_FUN
+  void SetHasGpuAlloc() {
+    header_->flags_.SetBits(MEMORY_BACKEND_HAS_GPU_ALLOC);
+  }
+
+  /** Check if data has a GPU allocation */
+  HSHM_CROSS_FUN
+  bool IsHasGpuAlloc() {
+    return header_->flags_.Any(MEMORY_BACKEND_HAS_GPU_ALLOC);
+  }
+
+  /** Unmark data as having a GPU allocation */
+  HSHM_CROSS_FUN
+  void UnsetHasGpuAlloc() {
+    header_->flags_.UnsetBits(MEMORY_BACKEND_HAS_GPU_ALLOC);
+  }
+
+  /** Mark data as scanned */
+  HSHM_CROSS_FUN
+  void SetScanned() { flags_.SetBits(MEMORY_BACKEND_IS_SCANNED); }
+
+  /** Check if data is scanned */
+  HSHM_CROSS_FUN
+  bool IsScanned() { return flags_.Any(MEMORY_BACKEND_IS_SCANNED); }
+
+  /** Unmark data as scanned */
+  HSHM_CROSS_FUN
+  void UnsetScanned() { flags_.UnsetBits(MEMORY_BACKEND_IS_SCANNED); }
 
   /** This is the process which destroys the backend */
   HSHM_CROSS_FUN

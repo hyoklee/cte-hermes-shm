@@ -10,11 +10,9 @@
  * have access to the file, you may request a copy from help@hdfgroup.org.   *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#ifndef HSHM_INCLUDE_MEMORY_BACKEND_ROCM_SHM_MMAP_H
-#define HSHM_INCLUDE_MEMORY_BACKEND_ROCM_SHM_MMAP_H
+#ifndef HSHM_INCLUDE_MEMORY_BACKEND_GPU_SHM_MMAP_H
+#define HSHM_INCLUDE_MEMORY_BACKEND_GPU_SHM_MMAP_H
 
-#include <fcntl.h>
-#include <hip/hip_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,24 +22,25 @@
 #include "hermes_shm/constants/macros.h"
 #include "hermes_shm/introspect/system_info.h"
 #include "hermes_shm/util/errors.h"
+#include "hermes_shm/util/gpu_api.h"
 #include "hermes_shm/util/logging.h"
 #include "memory_backend.h"
 #include "posix_shm_mmap.h"
 
 namespace hshm::ipc {
 
-class RocmShmMmap : public PosixShmMmap {
+class GpuShmMmap : public PosixShmMmap {
  public:
-  CLS_CONST MemoryBackendType EnumType = MemoryBackendType::kRocmShmMmap;
+  CLS_CONST MemoryBackendType EnumType = MemoryBackendType::kGpuShmMmap;
 
  public:
   /** Constructor */
   HSHM_CROSS_FUN
-  RocmShmMmap() {}
+  GpuShmMmap() {}
 
   /** Destructor */
   HSHM_CROSS_FUN
-  ~RocmShmMmap() {
+  ~GpuShmMmap() {
 #ifdef HSHM_IS_HOST
     if (IsOwned()) {
       _Destroy();
@@ -53,41 +52,51 @@ class RocmShmMmap : public PosixShmMmap {
 
   /** Initialize shared memory */
   bool shm_init(const MemoryBackendId& backend_id, size_t size,
-                const hshm::chararr& url, int device) {
-    HIP_ERROR_CHECK(hipDeviceSynchronize());
-    HIP_ERROR_CHECK(hipSetDevice(device));
+                const hshm::chararr& url, int gpu_id = 0) {
     bool ret = PosixShmMmap::shm_init(backend_id, size, url);
-    Register(header_, HSHM_SYSTEM_INFO->page_size_);
-    Register(data_, size);
     if (!ret) {
       return false;
     }
-    header_->type_ = MemoryBackendType::kRocmShmMmap;
+    SetCopyGpu();
+    SetMirrorGpu();
+    Register(header_, HSHM_SYSTEM_INFO->page_size_);
+    Register(data_, size);
+    header_->accel_data_size_ = data_size_;
+    header_->accel_id_ = gpu_id;
+    accel_data_ = data_;
+    accel_data_size_ = data_size_;
+    accel_id_ = header_->accel_id_;
+    header_->type_ = MemoryBackendType::kGpuShmMmap;
     return true;
   }
 
   /** SHM deserialize */
   bool shm_deserialize(const hshm::chararr& url) {
+    SetCopyGpu();
+    SetMirrorGpu();
     bool ret = PosixShmMmap::shm_deserialize(url);
     Register(header_, HSHM_SYSTEM_INFO->page_size_);
     Register(data_, data_size_);
+    accel_data_ = data_;
+    accel_data_size_ = data_size_;
+    accel_id_ = header_->accel_id_;
     return ret;
   }
 
   /** Map shared memory */
   template <typename T>
   void Register(T* ptr, size_t size) {
-    HIP_ERROR_CHECK(hipHostRegister((void*)ptr, size, hipHostRegisterPortable));
+    GpuApi::RegisterHostMemory(ptr, size);
   }
 
   /** Detach shared memory */
   void _Detach() {
-    HIP_ERROR_CHECK(hipHostUnregister(header_));
-    HIP_ERROR_CHECK(hipHostUnregister(data_));
+    GpuApi::UnregisterHostMemory(header_);
+    GpuApi::UnregisterHostMemory(data_);
     PosixShmMmap::_Detach();
   }
 };
 
 }  // namespace hshm::ipc
 
-#endif  // HSHM_INCLUDE_MEMORY_BACKEND_ROCM_SHM_MMAP_H
+#endif  // HSHM_INCLUDE_MEMORY_BACKEND_GPU_SHM_MMAP_H
