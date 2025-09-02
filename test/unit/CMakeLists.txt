@@ -10,6 +10,7 @@ add_subdirectory(backend)
 add_subdirectory(types)
 add_subdirectory(thread)
 add_subdirectory(singleton)
+add_subdirectory(solvers)
 
 if(NOT HSHM_COMPILER_MSVC)
     add_subdirectory(interceptor)
@@ -29,4 +30,8 @@ endif()
 
 if(HSHM_ENABLE_ENCRYPT)
     add_subdirectory(encrypt)
+endif()
+
+if(HSHM_ENABLE_ZMQ)
+    add_subdirectory(lightbeam)
 endif()

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.10)
 project(hermes_shm LANGUAGES C CXX)
 include(CTest)
 set(CMAKE_CXX_STANDARD 17)
@@ -24,6 +24,7 @@ option(HSHM_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(HSHM_ENABLE_CMAKE_DOTENV "Build benchmarks" OFF)
 
 option(HSHM_ENABLE_MPI "Enable MPI support" OFF)
+option(HSHM_ENABLE_ZMQ "Enable ZeroMQ transport" OFF)
 option(HSHM_RPC_THALLIUM "Build tests which depend on thallium" OFF)
 option(HSHM_ENABLE_OPENMP "Enable the use of OpenMP" OFF)
 option(HSHM_ENABLE_CEREAL "Enable serialization using cereal" ON)
@@ -171,12 +172,8 @@ endif()
 # HOST DEPENDENCIES
 add_library(host_deps INTERFACE)
 
-if(NOT YAML_CPP_LIBRARIES)
-    set(YAML_CPP_LIBRARIES yaml-cpp)
-endif()
-
 target_link_libraries(host_deps INTERFACE
-    ${YAML_CPP_LIBRARIES}
+    ${YAML_CPP_LIBS}
     ${REAL_TIME_FLAGS}
     ${SERIALIZATION_LIBS}
     ${COMPRESS_LIBS}
